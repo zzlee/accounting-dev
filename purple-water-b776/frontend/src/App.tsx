@@ -70,8 +70,8 @@ function App() {
 	const monthlySummary = useMemo<MonthlySummary>(() => {
 		const summary = data.reduce(
 			(acc, transaction) => {
-				if (transaction.item_category === '收入') {
-					acc.income += transaction.amount;
+				if (transaction.amount < 0) {
+					acc.income += -transaction.amount;
 				} else {
 					acc.expense += transaction.amount;
 				}
