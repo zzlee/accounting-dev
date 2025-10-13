@@ -180,16 +180,26 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 			header: '金額',
 			cell: ({ row }) => {
 				const isEditing = editingRowId === row.original.transaction_id;
-				return isEditing && editFormData ? (
-					<input 
-						type="number"
-						name="amount"
-						defaultValue={editFormData.amount}
-						onChange={handleInputChange}
-						className="form-control form-control-sm"
-					/>
-				) : (
-					new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(row.original.amount)
+				if (isEditing && editFormData) {
+					return (
+						<input
+							type="number"
+							name="amount"
+							defaultValue={editFormData.amount}
+							onChange={handleInputChange}
+							className="form-control form-control-sm"
+						/>
+					);
+				}
+
+				const amount = row.original.amount;
+				const amountColor = amount > 0 ? 'text-danger' : 'text-success';
+				const formattedAmount = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(amount);
+
+				return (
+					<span className={amountColor}>
+						{formattedAmount}
+					</span>
 				);
 			},
 		},

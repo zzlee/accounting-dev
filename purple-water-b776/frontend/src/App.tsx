@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { TransactionsTable } from './TransactionsTable';
 import type { Transaction } from './TransactionsTable';
 import TransactionCard from './TransactionCard';
-import AddTransactionForm from './AddTransactionForm';
-import { FaChevronLeft, FaChevronRight, FaPlus } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaPlus, FaCog, FaFilter } from 'react-icons/fa';
+
+const AddTransactionForm = lazy(() => import('./AddTransactionForm'));
+const CategoryManager = lazy(() => import('./CategoryManager'));
 
 // Define types for the categories
 export interface ItemCategory {
@@ -30,6 +32,8 @@ function App() {
 	const [itemCategories, setItemCategories] = useState<ItemCategory[]>([]);
 	const [paymentCategories, setPaymentCategories] = useState<PaymentCategory[]>([]);
 	const [showAddModal, setShowAddModal] = useState(false);
+	const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
 
 	// Fetch transactions
 	useEffect(() => {
@@ -43,7 +47,10 @@ function App() {
 				if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 				return res.json();
 			})
-			.then((responseData) => setData(responseData as Transaction[]))
+			.then((responseData) => {
+        setData(responseData as Transaction[]);
+        setSelectedCategoryIds(new Set()); // Reset filter when month changes
+      })
 			.catch((err) => {
 				setError(err as Error);
 				setData([]); // Clear data on error
@@ -67,8 +74,27 @@ function App() {
 		});
 	}, []);
 
+  const handleCategoryFilterChange = (categoryId: number) => {
+    setSelectedCategoryIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  const filteredData = useMemo(() => {
+    if (selectedCategoryIds.size === 0) {
+      return data;
+    }
+    return data.filter(transaction => selectedCategoryIds.has(transaction.item_category_id));
+  }, [data, selectedCategoryIds]);
+
 	const monthlySummary = useMemo<MonthlySummary>(() => {
-		const summary = data.reduce(
+		const summary = filteredData.reduce(
 			(acc, transaction) => {
 				if (transaction.amount < 0) {
 					acc.income += -transaction.amount;
@@ -82,7 +108,7 @@ function App() {
 
 		summary.net = summary.income - summary.expense;
 		return summary;
-	}, [data]);
+	}, [filteredData]);
 
 	const handlePrevMonth = () => {
 		setCurrentDate((prevDate) => {
@@ -125,13 +151,61 @@ function App() {
 
 	const formattedMonth = new Intl.DateTimeFormat('zh-TW', { year: 'numeric', month: 'long' }).format(currentDate);
 
+	const suspenseFallback = (
+		<div className="position-fixed top-0 start-0 vh-100 vw-100 d-flex justify-content-center align-items-center bg-dark bg-opacity-50" style={{ zIndex: 1055 }}>
+		  <div className="spinner-border text-light" role="status">
+			<span className="visually-hidden">Loading...</span>
+		  </div>
+		</div>
+	  );
+
 	return (
 		<div className="container my-4">
 			<header className="d-flex justify-content-between align-items-center mb-4">
 				<h1 className="display-5">交易紀錄</h1>
-				<button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-					<FaPlus className="me-2" />新增交易
-				</button>
+        <div className="btn-group">
+          <button className="btn btn-outline-secondary" title="新增交易" onClick={() => setShowAddModal(true)}>
+            <FaPlus />
+          </button>
+          <button className="btn btn-outline-secondary" title="管理類別" onClick={() => setShowCategoryModal(true)}>
+            <FaCog />
+          </button>
+          <div className="dropdown btn-group" role="group">
+            <button 
+              className={`btn ${selectedCategoryIds.size > 0 ? 'btn-primary' : 'btn-outline-secondary'}`} 
+              type="button" 
+              id="categoryFilterDropdown"
+              data-bs-toggle="dropdown" 
+              data-bs-auto-close="outside" 
+              aria-expanded="false"
+              title="篩選項目類別"
+            >
+              <FaFilter />
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="categoryFilterDropdown">
+              <li>
+                <a className="dropdown-item" href="#" onClick={(e) => { e.preventDefault(); setSelectedCategoryIds(new Set()); }}>
+                  全部顯示
+                </a>
+              </li>
+              <li><hr className="dropdown-divider" /></li>
+              {itemCategories.map(cat => (
+                <li key={cat.id}>
+                  <label htmlFor={`filter-check-${cat.id}`} className="dropdown-item d-flex align-items-center gap-2">
+                    <input
+                      className="form-check-input m-0"
+                      type="checkbox"
+                      id={`filter-check-${cat.id}`}
+                      checked={selectedCategoryIds.has(cat.id)}
+                      onChange={() => handleCategoryFilterChange(cat.id)}
+                    />
+                    {cat.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
 			</header>
 
 			<main>
@@ -153,16 +227,18 @@ function App() {
 					</div>
 				</div>
 
+
+
 				{isLoading && <div className="text-center p-5"><div className="spinner-border" role="status"><span className="visually-hidden">Loading...</span></div></div>}
 				{error && <div className="alert alert-danger">Error fetching data: {error.message}</div>}
-				{!isLoading && !error && data.length > 0 && (
+				{!isLoading && !error && filteredData.length > 0 && (
 					<>
 						{/* Desktop Table View */}
 						<div className="d-none d-lg-block">
 							<div className="card">
 								<div className="card-body p-0">
 									<TransactionsTable 
-										data={data} 
+										data={filteredData} 
 										itemCategories={itemCategories}
 										paymentCategories={paymentCategories}
 										onUpdateTransaction={handleUpdateTransaction}
@@ -174,7 +250,7 @@ function App() {
 
 						{/* Mobile Card List View */}
 						<div className="d-block d-lg-none">
-							{data.map((tx) => (
+							{filteredData.map((tx) => (
 								<TransactionCard 
 									key={tx.transaction_id} 
 									transaction={tx} 
@@ -187,9 +263,9 @@ function App() {
 						</div>
 					</>
 				)}
-        {!isLoading && !error && data.length === 0 && (
+        {(!isLoading && !error && filteredData.length === 0) && (
           <div className="text-center p-5 border rounded bg-white">
-            <p className="text-muted mb-0">這個月沒有交易紀錄。</p>
+            <p className="text-muted mb-0">{data.length > 0 ? '沒有符合篩選條件的交易紀錄。' : '這個月沒有交易紀錄。'}</p>
           </div>
         )}
 			</main>
@@ -198,13 +274,24 @@ function App() {
 				<p>Accounting App &copy; 2025</p>
 			</footer>
 
-			<AddTransactionForm 
-				show={showAddModal}
-				onHide={() => setShowAddModal(false)}
-				itemCategories={itemCategories}
-				paymentCategories={paymentCategories}
-				onAddTransaction={handleAddTransaction}
-			/>
+			<Suspense fallback={suspenseFallback}>
+				{showAddModal && <AddTransactionForm 
+					show={showAddModal}
+					onHide={() => setShowAddModal(false)}
+					itemCategories={itemCategories}
+					paymentCategories={paymentCategories}
+					onAddTransaction={handleAddTransaction}
+				/>}
+
+				{showCategoryModal && <CategoryManager 
+					show={showCategoryModal}
+					onHide={() => setShowCategoryModal(false)}
+					itemCategories={itemCategories}
+					paymentCategories={paymentCategories}
+					setItemCategories={setItemCategories}
+					setPaymentCategories={setPaymentCategories}
+				/>}
+			</Suspense>
 		</div>
 	);
 }

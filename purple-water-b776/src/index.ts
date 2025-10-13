@@ -123,18 +123,156 @@ export default {
 				}
 			}
 
-			// GET /api/item-categories
-			if (url.pathname === '/api/item-categories' && request.method === 'GET') {
-				const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories ORDER BY id").all();
-				const jsonResponse = new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
-				return addCorsHeaders(jsonResponse);
+			// Handle /api/item-categories
+			if (url.pathname === '/api/item-categories') {
+				// GET /api/item-categories
+				if (request.method === 'GET') {
+					const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories ORDER BY name").all();
+					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
+				}
+
+				// POST /api/item-categories
+				if (request.method === 'POST') {
+					try {
+						const body = await request.json<{ name: string }>();
+						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+						}
+
+						const result = await env.accounting.prepare(
+							`INSERT INTO item_categories (name) VALUES (?)`
+						).bind(body.name.trim()).run();
+
+						const newId = result.meta.last_row_id;
+						const newCategory = { id: newId, name: body.name.trim() };
+
+						return addCorsHeaders(new Response(JSON.stringify(newCategory), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
 			}
 
-			// GET /api/payment-categories
-			if (url.pathname === '/api/payment-categories' && request.method === 'GET') {
-				const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories ORDER BY id").all();
-				const jsonResponse = new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
-				return addCorsHeaders(jsonResponse);
+			// Handle /api/payment-categories
+			if (url.pathname === '/api/payment-categories') {
+				// GET /api/payment-categories
+				if (request.method === 'GET') {
+					const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories ORDER BY name").all();
+					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
+				}
+
+				// POST /api/payment-categories
+				if (request.method === 'POST') {
+					try {
+						const body = await request.json<{ name: string }>();
+						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+						}
+
+						const result = await env.accounting.prepare(
+							`INSERT INTO payment_categories (name) VALUES (?)`
+						).bind(body.name.trim()).run();
+
+						const newId = result.meta.last_row_id;
+						const newCategory = { id: newId, name: body.name.trim() };
+
+						return addCorsHeaders(new Response(JSON.stringify(newCategory), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
+			}
+
+			// Handle /api/item-categories/:id
+			const itemCategoryMatch = url.pathname.match(/^\/api\/item-categories\/(\d+)$/);
+			if (itemCategoryMatch) {
+				const categoryId = parseInt(itemCategoryMatch[1], 10);
+
+				// PUT /api/item-categories/:id
+				if (request.method === 'PUT') {
+					try {
+						const body = await request.json<{ name: string }>();
+						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+						}
+
+						await env.accounting.prepare(
+							`UPDATE item_categories SET name = ? WHERE id = ?`
+						).bind(body.name.trim(), categoryId).run();
+
+						const updatedCategory = { id: categoryId, name: body.name.trim() };
+						return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
+
+				// DELETE /api/item-categories/:id
+				if (request.method === 'DELETE') {
+					try {
+						const usageCheck = await env.accounting.prepare(
+							`SELECT 1 FROM transactions WHERE item_category_id = ? LIMIT 1`
+						).bind(categoryId).first();
+
+						if (usageCheck) {
+							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
+						}
+
+						await env.accounting.prepare(
+							'DELETE FROM item_categories WHERE id = ?'
+						).bind(categoryId).run();
+
+						return addCorsHeaders(new Response(null, { status: 204 }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
+			}
+
+			// Handle /api/payment-categories/:id
+			const paymentCategoryMatch = url.pathname.match(/^\/api\/payment-categories\/(\d+)$/);
+			if (paymentCategoryMatch) {
+				const categoryId = parseInt(paymentCategoryMatch[1], 10);
+
+				// PUT /api/payment-categories/:id
+				if (request.method === 'PUT') {
+					try {
+						const body = await request.json<{ name: string }>();
+						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+						}
+
+						await env.accounting.prepare(
+							`UPDATE payment_categories SET name = ? WHERE id = ?`
+						).bind(body.name.trim(), categoryId).run();
+
+						const updatedCategory = { id: categoryId, name: body.name.trim() };
+						return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
+
+				// DELETE /api/payment-categories/:id
+				if (request.method === 'DELETE') {
+					try {
+						const usageCheck = await env.accounting.prepare(
+							`SELECT 1 FROM transactions WHERE payment_category_id = ? LIMIT 1`
+						).bind(categoryId).first();
+
+						if (usageCheck) {
+							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
+						}
+
+						await env.accounting.prepare(
+							'DELETE FROM payment_categories WHERE id = ?'
+						).bind(categoryId).run();
+
+						return addCorsHeaders(new Response(null, { status: 204 }));
+					} catch (e: any) {
+						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+					}
+				}
 			}
       
       // Handle /api/transactions/:id

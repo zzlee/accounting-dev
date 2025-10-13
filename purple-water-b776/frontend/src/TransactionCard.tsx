@@ -113,9 +113,8 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 		);
 	}
 
-	const isExpense = transaction.item_category !== '收入';
-	const amountColor = isExpense ? 'text-danger' : 'text-success';
-	const borderClass = isExpense ? 'border-danger-subtle' : 'border-success-subtle';
+	const amountColor = transaction.amount > 0 ? 'text-danger' : 'text-success';
+	const borderClass = transaction.amount > 0 ? 'border-danger-subtle' : 'border-success-subtle';
 
 	return (
 		<div className={`card mb-2 ${borderClass}`}>
