@@ -188,7 +188,6 @@ function App() {
 	return (
 		<div className="container my-4">
 			<header className="d-flex justify-content-between align-items-center mb-4 gap-3">
-				<h1 className="display-5 mb-0 text-nowrap">交易紀錄</h1>
 				<div className="input-group w-100" style={{ maxWidth: '400px' }}>
 					<input
 						type="text"
