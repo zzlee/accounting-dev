@@ -38,6 +38,7 @@ export default {
 				if (request.method === 'GET') {
 					const year = url.searchParams.get('year');
 					const month = url.searchParams.get('month');
+					const searchTerm = url.searchParams.get('search');
 					let yearMonth;
 
 					if (year && month) {
@@ -50,28 +51,34 @@ export default {
 						yearMonth = `${currentYear}-${currentMonth}`;
 					}
 
-					const { results } = await env.accounting.prepare(
-							`
-              SELECT
-                t.transaction_id,
-                t.transaction_date,
-                t.item_name,
-                ic.name as item_category,
-                pc.name as payment_category,
-                t.amount,
-                t.notes,
-                t.item_category_id,
-                t.payment_category_id
-              FROM transactions t
-              LEFT JOIN item_categories ic ON t.item_category_id = ic.id
-              LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
-              WHERE strftime('%Y-%m', t.transaction_date) = ?
-              ORDER BY t.transaction_date DESC, t.transaction_id DESC;
-            `
-						)
-						.bind(yearMonth)
-						.all();
-					
+					let query = `
+            SELECT
+              t.transaction_id,
+              t.transaction_date,
+              t.item_name,
+              ic.name as item_category,
+              pc.name as payment_category,
+              t.amount,
+              t.notes,
+              t.item_category_id,
+              t.payment_category_id
+            FROM transactions t
+            LEFT JOIN item_categories ic ON t.item_category_id = ic.id
+            LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
+            WHERE strftime('%Y-%m', t.transaction_date) = ?
+          `;
+					const bindings: (string | number)[] = [yearMonth];
+
+					if (searchTerm) {
+						query += ` AND (LOWER(t.item_name) LIKE ? OR LOWER(t.notes) LIKE ?)`;
+						const searchTermLike = `%${searchTerm.toLowerCase()}%`;
+						bindings.push(searchTermLike, searchTermLike);
+					}
+
+					query += ` ORDER BY t.transaction_date DESC, t.transaction_id DESC;`;
+
+					const { results } = await env.accounting.prepare(query).bind(...bindings).all();
+
 					const jsonResponse = new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
 					return addCorsHeaders(jsonResponse);
 				}
