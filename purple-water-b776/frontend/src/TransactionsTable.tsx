@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useReactTable, getCoreRowModel, flexRender, type Row } from '@tanstack/react-table';
 import type { ColumnDef } from '@tanstack/react-table';
 import DatePicker from 'react-datepicker';
+import { FaTrash } from 'react-icons/fa';
 import type { ItemCategory, PaymentCategory } from './App'; // Import category types
 
 // The shape of our data needs to include the IDs for the categories
@@ -142,7 +143,7 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 			cell: ({ row }) => {
 				const isEditing = editingRowId === row.original.transaction_id;
 				return isEditing && editFormData ? (
-					<input 
+					<input
 						type="text"
 						name="item_name"
 						defaultValue={editFormData.item_name}
@@ -150,7 +151,9 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 						className="form-control form-control-sm"
 					/>
 				) : (
-					row.original.item_name
+					<div onClick={() => handleEditClick(row)} style={{ cursor: 'pointer' }}>
+						{row.original.item_name}
+					</div>
 				);
 			},
 		},
@@ -253,10 +256,9 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 						<button className="btn btn-sm btn-secondary" onClick={handleCancelClick}>取消</button>
 					</>
 				) : (
-					<>
-						<button className="btn btn-sm btn-primary me-1" onClick={() => handleEditClick(row)}>編輯</button>
-						<button className="btn btn-sm btn-danger" onClick={() => handleDeleteClick(row.original.transaction_id)}>刪除</button>
-					</>
+					<button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteClick(row.original.transaction_id)}>
+						<FaTrash />
+					</button>
 				);
 			},
 		},

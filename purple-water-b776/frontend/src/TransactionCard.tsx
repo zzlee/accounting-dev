@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Transaction } from './TransactionsTable';
 import type { ItemCategory, PaymentCategory } from './App';
 import DatePicker from 'react-datepicker';
+import { FaTrash } from 'react-icons/fa';
 
 interface TransactionCardProps {
 	transaction: Transaction;
@@ -119,12 +120,15 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 	return (
 		<div className={`card mb-2 ${borderClass}`}>
 			<div className="card-body p-3">
-				<div className="d-flex justify-content-between">
-					<div className="me-3">
+				<div className="d-flex justify-content-between align-items-start" onClick={handleEditClick} style={{ cursor: 'pointer' }}>
+					<div className="me-3 flex-grow-1">
 						<h5 className="card-title mb-1">{transaction.item_name}</h5>
 						<h6 className="card-subtitle text-muted">{transaction.item_category || '未分類'}</h6>
 					</div>
-					<div className={`text-end fs-5 fw-bold ${amountColor}`}>{formatCurrency(transaction.amount)}</div>
+					<div className="text-end">
+						<div className={`fs-5 fw-bold ${amountColor}`}>{formatCurrency(transaction.amount)}</div>
+						<div className="text-muted small">{new Date(transaction.transaction_date).toLocaleDateString()}</div>
+					</div>
 				</div>
 				<div className="mt-2 pt-2 border-top d-flex justify-content-between align-items-center text-muted small">
 					<div>
@@ -132,8 +136,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 						{transaction.notes && <div className="text-muted fst-italic">{transaction.notes}</div>}
 					</div>
 					<div className="btn-group">
-						<button className="btn btn-sm btn-outline-primary" onClick={handleEditClick}>編輯</button>
-						<button className="btn btn-sm btn-outline-danger" onClick={handleDeleteClick}>刪除</button>
+						<button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}><FaTrash /></button>
 					</div>
 				</div>
 			</div>
