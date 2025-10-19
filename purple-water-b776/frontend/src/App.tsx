@@ -295,7 +295,7 @@ function App() {
 						{/* Desktop Table View */}
 						<div className="d-none d-lg-block">
 							<div className="card">
-								<div className="card-body p-0">
+								<div className="card-body p-0" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
 									<TransactionsTable
 										data={filteredData}
 										itemCategories={itemCategories}
@@ -309,16 +309,20 @@ function App() {
 
 						{/* Mobile Card List View */}
 						<div className="d-block d-lg-none">
-							{filteredData.map(tx => (
-								<TransactionCard
-									key={tx.transaction_id}
-									transaction={tx}
-									itemCategories={itemCategories}
-									paymentCategories={paymentCategories}
-									onUpdateTransaction={handleUpdateTransaction}
-									onDeleteTransaction={handleDeleteTransaction}
-								/>
-							))}
+							<div className="card">
+								<div className="card-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+									{filteredData.map(tx => (
+										<TransactionCard
+											key={tx.transaction_id}
+											transaction={tx}
+											itemCategories={itemCategories}
+											paymentCategories={paymentCategories}
+											onUpdateTransaction={handleUpdateTransaction}
+											onDeleteTransaction={handleDeleteTransaction}
+										/>
+									))}
+								</div>
+							</div>
 						</div>
 					</>
 				)}
