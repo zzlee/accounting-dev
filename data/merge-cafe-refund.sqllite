@@ -1,0 +1,6 @@
+-- 刪除10月份的咖啡退費相關交易
+DELETE FROM transactions WHERE transaction_id IN (155, 164, 167, 170, 187, 192, 199, 205, 213, 222, 232, 233, 240);
+
+-- 新增一筆加總後的咖啡退費交易
+INSERT INTO transactions (transaction_date, item_name, item_category_id, amount, payment_category_id, notes)
+VALUES ('2025-10-31', '咖啡退費總和', 4, -140, 1, '合併10月份咖啡退費');
