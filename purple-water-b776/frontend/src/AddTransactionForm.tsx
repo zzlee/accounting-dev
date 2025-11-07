@@ -11,6 +11,13 @@ interface AddTransactionFormProps {
   onAddTransaction: (newTransaction: Transaction) => void;
 }
 
+const formatDateToYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction }) => {
   const getInitialFormData = () => ({
     transaction_date: new Date().toISOString().split('T')[0],
@@ -37,7 +44,7 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
 
   const handleDateChange = (date: Date | null) => {
     if (date) {
-      setFormData(prev => ({ ...prev, transaction_date: date.toISOString().split('T')[0] }));
+      setFormData(prev => ({ ...prev, transaction_date: formatDateToYYYYMMDD(date) }));
     }
   };
 
@@ -105,7 +112,7 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
                 </div>
                 <div className="mb-3">
                   <label className="form-label">金額</label>
-                  <input type="number" name="amount" value={formData.amount} onChange={handleInputChange} className="form-control" required />
+                  <input type="number" name="amount" value={formData.amount} onChange={handleInputChange} onFocus={(e) => e.target.select()} className="form-control" required />
                 </div>
                 <div className="mb-3">
                   <label className="form-label">項目類別</label>
