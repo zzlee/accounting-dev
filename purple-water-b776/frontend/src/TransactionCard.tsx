@@ -10,9 +10,10 @@ interface TransactionCardProps {
 	paymentCategories: PaymentCategory[];
 	onUpdateTransaction: (updatedTransaction: Transaction) => void;
 	onDeleteTransaction: (transactionId: number) => void;
+	userId: string;
 }
 
-const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCategories, paymentCategories, onUpdateTransaction, onDeleteTransaction }) => {
+const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCategories, paymentCategories, onUpdateTransaction, onDeleteTransaction, userId }) => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editFormData, setEditFormData] = useState<Partial<Transaction>>(transaction);
 
@@ -36,6 +37,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 					...editFormData,
 					item_category_id: Number(editFormData.item_category_id),
 					payment_category_id: Number(editFormData.payment_category_id),
+					user_id: Number(userId),
 				}),
 			});
 
@@ -62,10 +64,9 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 			return;
 		}
 
-		try {
-			const response = await fetch(`/api/transactions/${transaction.transaction_id}`, {
-				method: 'DELETE',
-			});
+		            try {
+		                const response = await fetch(`/api/transactions/${transaction.transaction_id}?user_id=${userId}`, {
+		                method: 'DELETE',			});
 
 			if (!response.ok) {
 				throw new Error('Failed to delete transaction');

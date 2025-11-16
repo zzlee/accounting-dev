@@ -9,6 +9,7 @@ interface AddTransactionFormProps {
   itemCategories: ItemCategory[];
   paymentCategories: PaymentCategory[];
   onAddTransaction: (newTransaction: Transaction) => void;
+  userId: string;
 }
 
 const formatDateToYYYYMMDD = (date: Date) => {
@@ -18,7 +19,7 @@ const formatDateToYYYYMMDD = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction }) => {
+const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction, userId }) => {
   const getInitialFormData = () => ({
     transaction_date: new Date().toISOString().split('T')[0],
     item_name: '',
@@ -64,6 +65,7 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
           amount: Number(formData.amount),
           item_category_id: Number(formData.item_category_id),
           payment_category_id: Number(formData.payment_category_id),
+          user_id: Number(userId), // Add userId to the request body
         }),
       });
 

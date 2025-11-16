@@ -24,16 +24,17 @@ interface TransactionsTableProps {
 	paymentCategories: PaymentCategory[];
 	onUpdateTransaction: (updatedTransaction: Transaction) => void;
 	onDeleteTransaction: (transactionId: number) => void;
+	userId: string;
 }
 
-export const TransactionsTable: React.FC<TransactionsTableProps> = ({ 
-	data, 
-	itemCategories, 
-	paymentCategories, 
-	onUpdateTransaction, 
-	onDeleteTransaction
-}) => {
-	const [editingRowId, setEditingRowId] = useState<number | null>(null);
+export const TransactionsTable: React.FC<TransactionsTableProps> = ({
+	data,
+	itemCategories,
+	paymentCategories,
+	onUpdateTransaction,
+	onDeleteTransaction,
+	userId
+}) => {	const [editingRowId, setEditingRowId] = useState<number | null>(null);
 	const [editFormData, setEditFormData] = useState<Partial<Transaction> | null>(null);
 
 	const handleEditClick = (row: Row<Transaction>) => {
@@ -57,12 +58,12 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify({
-					...updatedTransaction,
-					item_category_id: Number(updatedTransaction.item_category_id),
-					payment_category_id: Number(updatedTransaction.payment_category_id),
-				}),
-			});
+									body: JSON.stringify({
+									...updatedTransaction,
+									item_category_id: Number(updatedTransaction.item_category_id),
+									payment_category_id: Number(updatedTransaction.payment_category_id),
+									user_id: Number(userId),
+								}),			});
 
 			if (!response.ok) {
 				throw new Error('Failed to update transaction');
@@ -89,9 +90,8 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 			return;
 		}
 
-		try {
-			const response = await fetch(`/api/transactions/${transactionId}`, {
-				method: 'DELETE',
+					try {
+						const response = await fetch(`/api/transactions/${transactionId}?user_id=${userId}`, {				method: 'DELETE',
 			});
 
 			if (!response.ok) {

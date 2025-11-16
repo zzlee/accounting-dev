@@ -8,17 +8,18 @@ interface CategoryManagerProps {
   paymentCategories: PaymentCategory[];
   setItemCategories: React.Dispatch<React.SetStateAction<ItemCategory[]>>;
   setPaymentCategories: React.Dispatch<React.SetStateAction<PaymentCategory[]>>;
+  userId: string;
 }
 
-const CategoryManager: React.FC<CategoryManagerProps> = ({ 
-  show, 
-  onHide, 
-  itemCategories, 
-  paymentCategories, 
-  setItemCategories, 
-  setPaymentCategories 
-}) => {
-  const [activeTab, setActiveTab] = useState('item'); // 'item' or 'payment'
+const CategoryManager: React.FC<CategoryManagerProps> = ({
+  show,
+  onHide,
+  itemCategories,
+  paymentCategories,
+  setItemCategories,
+  setPaymentCategories,
+  userId
+}) => {  const [activeTab, setActiveTab] = useState('item'); // 'item' or 'payment'
 
   if (!show) {
     return null;
@@ -51,6 +52,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
                     setCategories={setItemCategories} 
                     apiPath="/api/item-categories"
                     categoryType="項目類別"
+                    userId={userId}
                   />
                 )}
                 {activeTab === 'payment' && (
@@ -60,6 +62,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
                     setCategories={setPaymentCategories} 
                     apiPath="/api/payment-categories"
                     categoryType="支付類別"
+                    userId={userId}
                   />
                 )}
               </div>
@@ -80,9 +83,10 @@ interface CategoryEditorProps<T extends { id: number; name: string }> {
   setCategories: React.Dispatch<React.SetStateAction<T[]>>;
   apiPath: string;
   categoryType: string;
+  userId: string;
 }
 
-function CategoryEditor<T extends { id: number; name: string }>({ categories, setCategories, apiPath, categoryType }: CategoryEditorProps<T>) {
+function CategoryEditor<T extends { id: number; name: string }>({ categories, setCategories, apiPath, categoryType, userId }: CategoryEditorProps<T>) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
   const [newName, setNewName] = useState('');
@@ -95,7 +99,7 @@ function CategoryEditor<T extends { id: number; name: string }>({ categories, se
       const response = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name: newName.trim(), user_id: Number(userId) }),
       });
       if (!response.ok) throw new Error(`Failed to add ${categoryType}`);
       const addedCategory = await response.json();
@@ -124,7 +128,7 @@ function CategoryEditor<T extends { id: number; name: string }>({ categories, se
       const response = await fetch(`${apiPath}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editingName.trim() }),
+        body: JSON.stringify({ name: editingName.trim(), user_id: Number(userId) }),
       });
       if (!response.ok) throw new Error(`Failed to update ${categoryType}`);
       const updatedCategory = await response.json();
@@ -140,7 +144,7 @@ function CategoryEditor<T extends { id: number; name: string }>({ categories, se
     if (!window.confirm(`您確定要刪除這個${categoryType}嗎？`)) return;
 
     try {
-      const response = await fetch(`${apiPath}/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${apiPath}/${id}?user_id=${userId}`, { method: 'DELETE' });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `Failed to delete ${categoryType}`);

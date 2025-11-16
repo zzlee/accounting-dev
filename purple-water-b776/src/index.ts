@@ -37,7 +37,7 @@ export default {
 			if (url.pathname === '/api/transactions') {
 				// GET /api/transactions
 				if (request.method === 'GET') {
-					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+					const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 					const year = url.searchParams.get('year');
 					const month = url.searchParams.get('month');
 					const searchTerm = url.searchParams.get('search');
@@ -137,7 +137,7 @@ export default {
 			if (url.pathname === '/api/item-categories') {
 				// GET /api/item-categories
 				if (request.method === 'GET') {
-					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+					const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 					const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
 					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
 				}
@@ -169,7 +169,7 @@ export default {
 			if (url.pathname === '/api/payment-categories') {
 				// GET /api/payment-categories
 				if (request.method === 'GET') {
-					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+					const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 					const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
 					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
 				}
@@ -229,7 +229,7 @@ export default {
 				// DELETE /api/item-categories/:id
 				if (request.method === 'DELETE') {
 					try {
-						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+						const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 						const usageCheck = await env.accounting.prepare(
 							`SELECT 1 FROM transactions WHERE item_category_id = ? AND user_id = ? LIMIT 1`
 						).bind(categoryId, userId).first();
@@ -285,7 +285,7 @@ export default {
 				// DELETE /api/payment-categories/:id
 				if (request.method === 'DELETE') {
 					try {
-						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+						const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 						const usageCheck = await env.accounting.prepare(
 							`SELECT 1 FROM transactions WHERE payment_category_id = ? AND user_id = ? LIMIT 1`
 						).bind(categoryId, userId).first();
@@ -306,6 +306,32 @@ export default {
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
+				}
+			}
+
+			// Handle /api/users
+			if (url.pathname === '/api/users' && request.method === 'POST') {
+				try {
+					const body = await request.json<{ name: string }>();
+					if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+						return addCorsHeaders(new Response('User name is required', { status: 400 }));
+					}
+
+					const trimmedName = body.name.trim();
+					const result = await env.accounting.prepare(
+						`INSERT INTO users (name) VALUES (?)`
+					).bind(trimmedName).run();
+
+					const newId = result.meta.last_row_id;
+					const newUser = { id: newId, name: trimmedName };
+
+					return addCorsHeaders(new Response(JSON.stringify(newUser), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+				} catch (e: any) {
+					// Handle unique constraint violation for username
+					if (e.message && e.message.includes('UNIQUE constraint failed: users.name')) {
+						return addCorsHeaders(new Response('User name already exists', { status: 409 })); // 409 Conflict
+					}
+					return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 				}
 			}
       
@@ -352,7 +378,7 @@ export default {
 				// DELETE /api/transactions/:id
 				if (request.method === 'DELETE') {
 					try {
-						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+						const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
 						
 						const result = await env.accounting.prepare(
 							'DELETE FROM transactions WHERE transaction_id = ? AND user_id = ?'

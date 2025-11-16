@@ -25,6 +25,10 @@ interface MonthlySummary {
 }
 
 function App() {
+	const userId = useMemo(() => {
+		const params = new URLSearchParams(window.location.search);
+		return params.get('user-id') || '1'; // Default to '1' if not present
+	}, []);
 	const [data, setData] = useState<Transaction[]>([]);
 	const [currentDate, setCurrentDate] = useState(new Date());
 	const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -48,54 +52,57 @@ function App() {
 		};
 	}, [searchTerm]);
 
-	// Fetch transactions
-	useEffect(() => {
-		const year = currentDate.getFullYear();
-		const month = currentDate.getMonth() + 1;
-		const params = new URLSearchParams({
-			year: year.toString(),
-			month: month.toString(),
-		});
-
-		if (debouncedSearchTerm) {
-			params.append('search', debouncedSearchTerm);
-		}
-
-		const apiUrl = `/api/transactions?${params.toString()}`;
-
-		setIsLoading(true);
-		fetch(apiUrl)
-			.then(res => {
-				if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-				return res.json();
-			})
-			.then(responseData => {
-				setData(responseData as Transaction[]);
-				// Reset category filter when month or search term changes, but not on initial load if there's a search term
-				if (selectedCategoryIds.size > 0) {
-					setSelectedCategoryIds(new Set());
-				}
-			})
-			.catch(err => {
-				setError(err as Error);
-				setData([]); // Clear data on error
-			})
-			.finally(() => setIsLoading(false));
-	}, [currentDate, debouncedSearchTerm]);
-
-	// Fetch categories on initial load
-	useEffect(() => {
-		Promise.all([fetch('/api/item-categories').then(res => res.json()), fetch('/api/payment-categories').then(res => res.json())])
-			.then(([itemCats, paymentCats]) => {
-				setItemCategories(itemCats as ItemCategory[]);
-				setPaymentCategories(paymentCats as PaymentCategory[]);
-			})
-			.catch(err => {
-				console.error('Failed to fetch categories:', err);
-				setError(err as Error);
-			});
-	}, []);
-
+	    // Fetch transactions
+	    useEffect(() => {
+	        const year = currentDate.getFullYear();
+	        const month = currentDate.getMonth() + 1;
+	        const params = new URLSearchParams({
+	            year: year.toString(),
+	            month: month.toString(),
+	            'user-id': userId, // Add user-id
+	        });
+	
+	        if (debouncedSearchTerm) {
+	            params.append('search', debouncedSearchTerm);
+	        }
+	
+	        const apiUrl = `/api/transactions?${params.toString()}`;
+	
+	        setIsLoading(true);
+	        fetch(apiUrl)
+	            .then(res => {
+	                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+	                return res.json();
+	            })
+	            .then(responseData => {
+	                setData(responseData as Transaction[]);
+	                // Reset category filter when month or search term changes, but not on initial load if there's a search term
+	                if (selectedCategoryIds.size > 0) {
+	                    setSelectedCategoryIds(new Set());
+	                }
+	            })
+	            .catch(err => {
+	                setError(err as Error);
+	                setData([]); // Clear data on error
+	            })
+	            .finally(() => setIsLoading(false));
+	    }, [currentDate, debouncedSearchTerm, userId]);
+	    // Fetch categories on initial load
+	    useEffect(() => {
+	        const params = new URLSearchParams({ 'user-id': userId });
+	        Promise.all([
+	            fetch(`/api/item-categories?${params.toString()}`).then(res => res.json()),
+	            fetch(`/api/payment-categories?${params.toString()}`).then(res => res.json())
+	        ])
+	            .then(([itemCats, paymentCats]) => {
+	                setItemCategories(itemCats as ItemCategory[]);
+	                setPaymentCategories(paymentCats as PaymentCategory[]);
+	            })
+	            .catch(err => {
+	                console.error('Failed to fetch categories:', err);
+	                setError(err as Error);
+	            });
+	    }, [userId]);
 	const handleCategoryFilterChange = (categoryId: number) => {
 		setSelectedCategoryIds(prev => {
 			const newSet = new Set(prev);
@@ -296,14 +303,14 @@ function App() {
 						<div className="d-none d-lg-block">
 							<div className="card">
 								<div className="card-body p-0" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-									<TransactionsTable
-										data={filteredData}
-										itemCategories={itemCategories}
-										paymentCategories={paymentCategories}
-										onUpdateTransaction={handleUpdateTransaction}
-										onDeleteTransaction={handleDeleteTransaction}
-									/>
-								</div>
+									                                    <TransactionsTable
+																			data={filteredData}
+																			itemCategories={itemCategories}
+																			paymentCategories={paymentCategories}
+																			onUpdateTransaction={handleUpdateTransaction}
+																			onDeleteTransaction={handleDeleteTransaction}
+																			userId={userId}
+																		/>								</div>
 							</div>
 						</div>
 
@@ -311,17 +318,17 @@ function App() {
 						<div className="d-block d-lg-none">
 							<div className="card">
 								<div className="card-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-									{filteredData.map(tx => (
-										<TransactionCard
-											key={tx.transaction_id}
-											transaction={tx}
-											itemCategories={itemCategories}
-											paymentCategories={paymentCategories}
-											onUpdateTransaction={handleUpdateTransaction}
-											onDeleteTransaction={handleDeleteTransaction}
-										/>
-									))}
-								</div>
+									                                    {filteredData.map(tx => (
+																			<TransactionCard
+																				key={tx.transaction_id}
+																				transaction={tx}
+																				itemCategories={itemCategories}
+																				paymentCategories={paymentCategories}
+																				onUpdateTransaction={handleUpdateTransaction}
+																				onDeleteTransaction={handleDeleteTransaction}
+																				userId={userId}
+																			/>
+																		))}								</div>
 							</div>
 						</div>
 					</>
@@ -339,26 +346,26 @@ function App() {
 
 			<Suspense fallback={suspenseFallback}>
 				{showAddModal && (
-					<AddTransactionForm
-						show={showAddModal}
-						onHide={() => setShowAddModal(false)}
-						itemCategories={itemCategories}
-						paymentCategories={paymentCategories}
-						onAddTransaction={handleAddTransaction}
-					/>
-				)}
+					                    <AddTransactionForm
+											show={showAddModal}
+											onHide={() => setShowAddModal(false)}
+											itemCategories={itemCategories}
+											paymentCategories={paymentCategories}
+											onAddTransaction={handleAddTransaction}
+											userId={userId}
+										/>				)}
 
-				{showCategoryModal && (
-					<CategoryManager
-						show={showCategoryModal}
-						onHide={() => setShowCategoryModal(false)}
-						itemCategories={itemCategories}
-						paymentCategories={paymentCategories}
-						setItemCategories={setItemCategories}
-						setPaymentCategories={setPaymentCategories}
-					/>
-				)}
-			</Suspense>
+				                {showCategoryModal && (
+									<CategoryManager
+										show={showCategoryModal}
+										onHide={() => setShowCategoryModal(false)}
+										itemCategories={itemCategories}
+										paymentCategories={paymentCategories}
+										setItemCategories={setItemCategories}
+										setPaymentCategories={setPaymentCategories}
+										userId={userId}
+									/>
+								)}			</Suspense>
 		</div>
 	);
 }
