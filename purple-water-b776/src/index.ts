@@ -20,6 +20,7 @@ function addCorsHeaders(response: Response): Response {
 	return new Response(response.body, { ...response, headers });
 }
 
+const DEFAULT_USER_ID = 1; // Add default user ID
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -36,6 +37,7 @@ export default {
 			if (url.pathname === '/api/transactions') {
 				// GET /api/transactions
 				if (request.method === 'GET') {
+					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
 					const year = url.searchParams.get('year');
 					const month = url.searchParams.get('month');
 					const searchTerm = url.searchParams.get('search');
@@ -65,9 +67,9 @@ export default {
             FROM transactions t
             LEFT JOIN item_categories ic ON t.item_category_id = ic.id
             LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
-            WHERE strftime('%Y-%m', t.transaction_date) = ?
+            WHERE strftime('%Y-%m', t.transaction_date) = ? AND t.user_id = ?
           `;
-					const bindings: (string | number)[] = [yearMonth];
+					const bindings: (string | number)[] = [yearMonth, userId];
 
 					if (searchTerm) {
 						query += ` AND (LOWER(t.item_name) LIKE ? OR LOWER(t.notes) LIKE ?)`;
@@ -87,14 +89,17 @@ export default {
 				if (request.method === 'POST') {
 					try {
 						const body = await request.json<any>();
+						const userId = body.user_id || DEFAULT_USER_ID;
+
 						if (!body.transaction_date || !body.item_name || !body.item_category_id || body.amount == null || !body.payment_category_id) {
 							return addCorsHeaders(new Response('Missing required fields', { status: 400 }));
 						}
 
 						const result = await env.accounting.prepare(
-							`INSERT INTO transactions (transaction_date, item_name, item_category_id, amount, payment_category_id, notes)
-							 VALUES (?, ?, ?, ?, ?, ?)`
+							`INSERT INTO transactions (user_id, transaction_date, item_name, item_category_id, amount, payment_category_id, notes)
+							 VALUES (?, ?, ?, ?, ?, ?, ?)`
 						).bind(
+							userId,
 							body.transaction_date,
 							body.item_name,
 							body.item_category_id,
@@ -103,8 +108,6 @@ export default {
 							body.notes || null
 						).run();
             
-            // D1 doesn't easily return the inserted ID, so we'll fetch the new record.
-            // This is a simplification; in a high-concurrency app, this could be unreliable.
             const newTxId = result.meta.last_row_id;
             const newTx = await env.accounting.prepare(
               `SELECT
@@ -134,21 +137,23 @@ export default {
 			if (url.pathname === '/api/item-categories') {
 				// GET /api/item-categories
 				if (request.method === 'GET') {
-					const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories ORDER BY name").all();
+					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+					const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
 					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
 				}
 
 				// POST /api/item-categories
 				if (request.method === 'POST') {
 					try {
-						const body = await request.json<{ name: string }>();
+						const body = await request.json<{ name: string, user_id?: number }>();
+						const userId = body.user_id || DEFAULT_USER_ID;
 						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
 							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
 						}
 
 						const result = await env.accounting.prepare(
-							`INSERT INTO item_categories (name) VALUES (?)`
-						).bind(body.name.trim()).run();
+							`INSERT INTO item_categories (user_id, name) VALUES (?, ?)`
+						).bind(userId, body.name.trim()).run();
 
 						const newId = result.meta.last_row_id;
 						const newCategory = { id: newId, name: body.name.trim() };
@@ -164,21 +169,23 @@ export default {
 			if (url.pathname === '/api/payment-categories') {
 				// GET /api/payment-categories
 				if (request.method === 'GET') {
-					const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories ORDER BY name").all();
+					const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+					const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
 					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
 				}
 
 				// POST /api/payment-categories
 				if (request.method === 'POST') {
 					try {
-						const body = await request.json<{ name: string }>();
+						const body = await request.json<{ name: string, user_id?: number }>();
+						const userId = body.user_id || DEFAULT_USER_ID;
 						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
 							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
 						}
 
 						const result = await env.accounting.prepare(
-							`INSERT INTO payment_categories (name) VALUES (?)`
-						).bind(body.name.trim()).run();
+							`INSERT INTO payment_categories (user_id, name) VALUES (?, ?)`
+						).bind(userId, body.name.trim()).run();
 
 						const newId = result.meta.last_row_id;
 						const newCategory = { id: newId, name: body.name.trim() };
@@ -198,17 +205,22 @@ export default {
 				// PUT /api/item-categories/:id
 				if (request.method === 'PUT') {
 					try {
-						const body = await request.json<{ name: string }>();
+						const body = await request.json<{ name: string, user_id?: number }>();
+						const userId = body.user_id || DEFAULT_USER_ID;
 						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
 							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
 						}
 
-						await env.accounting.prepare(
-							`UPDATE item_categories SET name = ? WHERE id = ?`
-						).bind(body.name.trim(), categoryId).run();
+						const result = await env.accounting.prepare(
+							`UPDATE item_categories SET name = ? WHERE id = ? AND user_id = ?`
+						).bind(body.name.trim(), categoryId, userId).run();
 
-						const updatedCategory = { id: categoryId, name: body.name.trim() };
-						return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+						if (result.meta.changes > 0) {
+							const updatedCategory = { id: categoryId, name: body.name.trim() };
+							return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+						} else {
+							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
@@ -217,19 +229,24 @@ export default {
 				// DELETE /api/item-categories/:id
 				if (request.method === 'DELETE') {
 					try {
+						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
 						const usageCheck = await env.accounting.prepare(
-							`SELECT 1 FROM transactions WHERE item_category_id = ? LIMIT 1`
-						).bind(categoryId).first();
+							`SELECT 1 FROM transactions WHERE item_category_id = ? AND user_id = ? LIMIT 1`
+						).bind(categoryId, userId).first();
 
 						if (usageCheck) {
 							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
 						}
 
-						await env.accounting.prepare(
-							'DELETE FROM item_categories WHERE id = ?'
-						).bind(categoryId).run();
+						const result = await env.accounting.prepare(
+							'DELETE FROM item_categories WHERE id = ? AND user_id = ?'
+						).bind(categoryId, userId).run();
 
-						return addCorsHeaders(new Response(null, { status: 204 }));
+						if (result.meta.changes > 0) {
+							return addCorsHeaders(new Response(null, { status: 204 }));
+						} else {
+							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
@@ -244,17 +261,22 @@ export default {
 				// PUT /api/payment-categories/:id
 				if (request.method === 'PUT') {
 					try {
-						const body = await request.json<{ name: string }>();
+						const body = await request.json<{ name: string, user_id?: number }>();
+						const userId = body.user_id || DEFAULT_USER_ID;
 						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
 							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
 						}
 
-						await env.accounting.prepare(
-							`UPDATE payment_categories SET name = ? WHERE id = ?`
-						).bind(body.name.trim(), categoryId).run();
+						const result = await env.accounting.prepare(
+							`UPDATE payment_categories SET name = ? WHERE id = ? AND user_id = ?`
+						).bind(body.name.trim(), categoryId, userId).run();
 
-						const updatedCategory = { id: categoryId, name: body.name.trim() };
-						return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+						if (result.meta.changes > 0) {
+							const updatedCategory = { id: categoryId, name: body.name.trim() };
+							return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+						} else {
+							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
@@ -263,19 +285,24 @@ export default {
 				// DELETE /api/payment-categories/:id
 				if (request.method === 'DELETE') {
 					try {
+						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
 						const usageCheck = await env.accounting.prepare(
-							`SELECT 1 FROM transactions WHERE payment_category_id = ? LIMIT 1`
-						).bind(categoryId).first();
+							`SELECT 1 FROM transactions WHERE payment_category_id = ? AND user_id = ? LIMIT 1`
+						).bind(categoryId, userId).first();
 
 						if (usageCheck) {
 							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
 						}
 
-						await env.accounting.prepare(
-							'DELETE FROM payment_categories WHERE id = ?'
-						).bind(categoryId).run();
+						const result = await env.accounting.prepare(
+							'DELETE FROM payment_categories WHERE id = ? AND user_id = ?'
+						).bind(categoryId, userId).run();
 
-						return addCorsHeaders(new Response(null, { status: 204 }));
+						if (result.meta.changes > 0) {
+							return addCorsHeaders(new Response(null, { status: 204 }));
+						} else {
+							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
@@ -291,14 +318,16 @@ export default {
 				if (request.method === 'PUT') {
 					try {
 						const body = await request.json<any>();
+						const userId = body.user_id || DEFAULT_USER_ID;
+
 						if (!body.transaction_date || !body.item_name || !body.item_category_id || body.amount == null || !body.payment_category_id) {
 							return addCorsHeaders(new Response('Missing required fields', { status: 400 }));
 						}
 
-						const { success } = await env.accounting.prepare(
+						const result = await env.accounting.prepare(
 								`UPDATE transactions
 							 SET transaction_date = ?, item_name = ?, item_category_id = ?, amount = ?, payment_category_id = ?, notes = ?
-							 WHERE transaction_id = ?`
+							 WHERE transaction_id = ? AND user_id = ?`
 						).bind(
 								body.transaction_date,
 								body.item_name,
@@ -306,13 +335,14 @@ export default {
 								body.amount,
 								body.payment_category_id,
 								body.notes || null,
-								transactionId // Corrected typo from tractionId
+								transactionId,
+								userId
 						).run();
 
-						if (success) {
+						if (result.meta.changes > 0) {
 							return addCorsHeaders(new Response(JSON.stringify({ message: 'Transaction updated successfully' }), { status: 200 }));
 						} else {
-							return addCorsHeaders(new Response('Failed to update transaction', { status: 500 }));
+							return addCorsHeaders(new Response('Transaction not found or user mismatch', { status: 404 }));
 						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
@@ -322,14 +352,16 @@ export default {
 				// DELETE /api/transactions/:id
 				if (request.method === 'DELETE') {
 					try {
-						const { success } = await env.accounting.prepare(
-							'DELETE FROM transactions WHERE transaction_id = ?'
-						).bind(transactionId).run();
+						const userId = url.searchParams.get('user_id') || DEFAULT_USER_ID;
+						
+						const result = await env.accounting.prepare(
+							'DELETE FROM transactions WHERE transaction_id = ? AND user_id = ?'
+						).bind(transactionId, userId).run();
 
-						if (success) {
+						if (result.meta.changes > 0) {
 							return addCorsHeaders(new Response(null, { status: 204 })); // No Content
 						} else {
-							return addCorsHeaders(new Response('Failed to delete transaction', { status: 500 }));
+							return addCorsHeaders(new Response('Transaction not found or user mismatch', { status: 404 }));
 						}
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
