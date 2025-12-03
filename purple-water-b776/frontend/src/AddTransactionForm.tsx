@@ -21,7 +21,7 @@ const formatDateToYYYYMMDD = (date: Date) => {
 
 const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction, userId }) => {
   const getInitialFormData = () => ({
-    transaction_date: new Date().toISOString().split('T')[0],
+    transaction_date: new Date().toLocaleString("sv-SE").replace(" ", "T").split('T')[0],
     item_name: '',
     amount: 0,
     item_category_id: itemCategories[0]?.id || 0,

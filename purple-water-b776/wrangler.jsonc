@@ -21,7 +21,8 @@
 		{
 			"binding": "accounting",
 			"database_name": "accounting",
-			"database_id": "0058e9f0-c6fa-49a9-9381-f5c5b6f6d0c3"
+			"database_id": "0058e9f0-c6fa-49a9-9381-f5c5b6f6d0c3",
+			"remote" : true
 		}
 	]
 	/**
