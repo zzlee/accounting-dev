@@ -3,6 +3,7 @@ import type { Transaction } from './TransactionsTable';
 import type { ItemCategory, PaymentCategory } from './App';
 import DatePicker from 'react-datepicker';
 import { FaTrash } from 'react-icons/fa';
+import { formatDateForDisplay, formatDateToYYYYMMDD, parseYYYYMMDDToLocalDate } from './dateUtils';
 
 interface TransactionCardProps {
 	transaction: Transaction;
@@ -86,8 +87,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 
 	const handleDateChange = (date: Date | null) => {
 		if (date) {
-			const formattedDate = date.toISOString().split('T')[0];
-			setEditFormData({ ...editFormData, transaction_date: formattedDate });
+			setEditFormData({ ...editFormData, transaction_date: formatDateToYYYYMMDD(date) });
 		}
 	};
 
@@ -101,7 +101,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 					{/* Form fields... */}
 					<div className="mb-2"><label className="form-label">項目名稱</label><input type="text" name="item_name" defaultValue={editFormData.item_name} onChange={handleInputChange} className="form-control form-control-sm" /></div>
 					<div className="mb-2"><label className="form-label">金額</label><input type="number" name="amount" defaultValue={editFormData.amount} onChange={handleInputChange} className="form-control form-control-sm" /></div>
-					<div className="mb-2"><label className="form-label">日期</label><DatePicker selected={new Date(editFormData.transaction_date || new Date())} onChange={handleDateChange} dateFormat="yyyy-MM-dd" className="form-control form-control-sm" /></div>
+					<div className="mb-2"><label className="form-label">日期</label><DatePicker selected={parseYYYYMMDDToLocalDate(editFormData.transaction_date || formatDateToYYYYMMDD(new Date()))} onChange={handleDateChange} dateFormat="yyyy-MM-dd" className="form-control form-control-sm" /></div>
 					<div className="mb-2"><label className="form-label">項目類別</label><select name="item_category_id" defaultValue={editFormData.item_category_id} onChange={handleInputChange} className="form-select form-select-sm">{itemCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></div>
 					<div className="mb-2"><label className="form-label">支付類別</label><select name="payment_category_id" defaultValue={editFormData.payment_category_id} onChange={handleInputChange} className="form-select form-select-sm">{paymentCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></div>
 					<div className="mb-3"><label className="form-label">備註</label><input type="text" name="notes" defaultValue={editFormData.notes || ''} onChange={handleInputChange} className="form-control form-control-sm" /></div>
@@ -128,7 +128,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, itemCate
 					</div>
 					<div className="text-end">
 						<div className={`fs-5 fw-bold ${amountColor}`}>{formatCurrency(transaction.amount)}</div>
-						<div className="text-muted small">{new Date(transaction.transaction_date).toLocaleDateString()}</div>
+						<div className="text-muted small">{formatDateForDisplay(transaction.transaction_date)}</div>
 					</div>
 				</div>
 				<div className="mt-2 pt-2 border-top d-flex justify-content-between align-items-center text-muted small">

@@ -4,6 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import DatePicker from 'react-datepicker';
 import { FaTrash } from 'react-icons/fa';
 import type { ItemCategory, PaymentCategory } from './App'; // Import category types
+import { formatDateForDisplay, formatDateToYYYYMMDD, parseYYYYMMDDToLocalDate } from './dateUtils';
 
 // The shape of our data needs to include the IDs for the categories
 export interface Transaction {
@@ -113,8 +114,7 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
 	const handleDateChange = (date: Date | null) => {
 		if (date) {
-			const formattedDate = date.toISOString().split('T')[0];
-			setEditFormData({ ...editFormData, transaction_date: formattedDate });
+			setEditFormData({ ...editFormData, transaction_date: formatDateToYYYYMMDD(date) });
 		}
 	};
 
@@ -127,13 +127,13 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 				const isEditing = editingRowId === row.original.transaction_id;
 				return isEditing && editFormData ? (
 					<DatePicker 
-						selected={new Date(editFormData.transaction_date || new Date())}
+						selected={parseYYYYMMDDToLocalDate(editFormData.transaction_date || formatDateToYYYYMMDD(new Date()))}
 						onChange={handleDateChange}
 						dateFormat="yyyy-MM-dd"
 						className="form-control form-control-sm"
 					/>
 				) : (
-					new Date(row.original.transaction_date).toLocaleDateString()
+					formatDateForDisplay(row.original.transaction_date)
 				);
 			},
 		},
