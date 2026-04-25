@@ -1,0 +1,372 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Accounting API",
+    "version": "1.0.0",
+    "description": "API for managing personal accounting transactions and categories"
+  },
+  "paths": {
+    "/api/transactions": {
+      "get": {
+        "summary": "Get transactions",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" },
+          { "name": "year", "in": "query", "schema": { "type": "string" }, "description": "Year" },
+          { "name": "month", "in": "query", "schema": { "type": "string" }, "description": "Month" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search term for item name or notes" },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date" },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date" },
+          { "name": "minAmount", "in": "query", "schema": { "type": "string" }, "description": "Minimum amount" },
+          { "name": "maxAmount", "in": "query", "schema": { "type": "string" }, "description": "Maximum amount" },
+          { "name": "itemCategoryId", "in": "query", "schema": { "type": "string" }, "description": "Item category ID(s), comma-separated" },
+          { "name": "paymentCategoryId", "in": "query", "schema": { "type": "string" }, "description": "Payment category ID(s), comma-separated" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Transaction" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a transaction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["transaction_date", "item_name", "item_category_id", "amount", "payment_category_id"],
+                "properties": {
+                  "user_id": { "type": "integer" },
+                  "transaction_date": { "type": "string", "format": "date" },
+                  "item_name": { "type": "string" },
+                  "item_category_id": { "type": "integer" },
+                  "amount": { "type": "number" },
+                  "payment_category_id": { "type": "integer" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Transaction created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Transaction" }
+              }
+            }
+          },
+          "400": { "description": "Missing required fields" }
+        }
+      }
+    },
+    "/api/transactions/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "put": {
+        "summary": "Update a transaction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["transaction_date", "item_name", "item_category_id", "amount", "payment_category_id"],
+                "properties": {
+                  "user_id": { "type": "integer" },
+                  "transaction_date": { "type": "string", "format": "date" },
+                  "item_name": { "type": "string" },
+                  "item_category_id": { "type": "integer" },
+                  "amount": { "type": "number" },
+                  "payment_category_id": { "type": "integer" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Transaction updated successfully" },
+          "400": { "description": "Missing required fields" },
+          "404": { "description": "Transaction not found or user mismatch" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a transaction",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" }
+        ],
+        "responses": {
+          "204": { "description": "Transaction deleted" },
+          "404": { "description": "Transaction not found or user mismatch" }
+        }
+      }
+    },
+    "/api/item-categories": {
+      "get": {
+        "summary": "Get item categories",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of item categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Category" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an item category",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "user_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Category" }
+              }
+            }
+          },
+          "400": { "description": "Category name is required" }
+        }
+      }
+    },
+    "/api/item-categories/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "put": {
+        "summary": "Update an item category",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "user_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Category" }
+              }
+            }
+          },
+          "400": { "description": "Category name is required" },
+          "404": { "description": "Category not found or user mismatch" }
+        }
+      },
+      "delete": {
+        "summary": "Delete an item category",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" }
+        ],
+        "responses": {
+          "204": { "description": "Category deleted" },
+          "400": { "description": "Category is in use" },
+          "404": { "description": "Category not found or user mismatch" }
+        }
+      }
+    },
+    "/api/payment-categories": {
+      "get": {
+        "summary": "Get payment categories",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of payment categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Category" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a payment category",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "user_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Category" }
+              }
+            }
+          },
+          "400": { "description": "Category name is required" }
+        }
+      }
+    },
+    "/api/payment-categories/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "put": {
+        "summary": "Update a payment category",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "user_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Category" }
+              }
+            }
+          },
+          "400": { "description": "Category name is required" },
+          "404": { "description": "Category not found or user mismatch" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a payment category",
+        "parameters": [
+          { "name": "user-id", "in": "query", "schema": { "type": "string" }, "description": "User ID" }
+        ],
+        "responses": {
+          "204": { "description": "Category deleted" },
+          "400": { "description": "Category is in use" },
+          "404": { "description": "Category not found or user mismatch" }
+        }
+      }
+    },
+    "/api/users": {
+      "post": {
+        "summary": "Create a user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "400": { "description": "User name is required" },
+          "409": { "description": "User name already exists" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "transaction_id": { "type": "integer" },
+          "transaction_date": { "type": "string", "format": "date" },
+          "item_name": { "type": "string" },
+          "item_category": { "type": "string" },
+          "payment_category": { "type": "string" },
+          "amount": { "type": "number" },
+          "notes": { "type": "string", "nullable": true },
+          "item_category_id": { "type": "integer" },
+          "payment_category_id": { "type": "integer" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  }
+}
