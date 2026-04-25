@@ -41,17 +41,12 @@ export default {
 					const year = url.searchParams.get('year');
 					const month = url.searchParams.get('month');
 					const searchTerm = url.searchParams.get('search');
-					let yearMonth;
-
-					if (year && month) {
-						const monthPadded = month.padStart(2, '0');
-						yearMonth = `${year}-${monthPadded}`;
-					} else {
-						const now = new Date();
-						const currentYear = now.getFullYear();
-						const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
-						yearMonth = `${currentYear}-${currentMonth}`;
-					}
+					const startDate = url.searchParams.get('startDate');
+					const endDate = url.searchParams.get('endDate');
+					const minAmount = url.searchParams.get('minAmount');
+					const maxAmount = url.searchParams.get('maxAmount');
+					const itemCategoryId = url.searchParams.get('itemCategoryId');
+					const paymentCategoryId = url.searchParams.get('paymentCategoryId');
 
 					let query = `
             SELECT
@@ -67,9 +62,59 @@ export default {
             FROM transactions t
             LEFT JOIN item_categories ic ON t.item_category_id = ic.id
             LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
-            WHERE strftime('%Y-%m', t.transaction_date) = ? AND t.user_id = ?
+            WHERE t.user_id = ?
           `;
-					const bindings: (string | number)[] = [yearMonth, userId];
+					const bindings: (string | number)[] = [userId];
+
+					if (startDate && endDate) {
+						query += ` AND t.transaction_date >= ? AND t.transaction_date <= ?`;
+						bindings.push(startDate, endDate);
+					} else if (startDate) {
+						query += ` AND t.transaction_date >= ?`;
+						bindings.push(startDate);
+					} else if (endDate) {
+						query += ` AND t.transaction_date <= ?`;
+						bindings.push(endDate);
+					} else {
+						// Fallback to year/month or current year/month
+						let yearMonth;
+						if (year && month) {
+							const monthPadded = month.padStart(2, '0');
+							yearMonth = `${year}-${monthPadded}`;
+						} else {
+							const now = new Date();
+							const currentYear = now.getFullYear();
+							const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+							yearMonth = `${currentYear}-${currentMonth}`;
+						}
+						query += ` AND strftime('%Y-%m', t.transaction_date) = ?`;
+						bindings.push(yearMonth);
+					}
+
+					if (minAmount !== null) {
+						query += ` AND t.amount >= ?`;
+						bindings.push(Number(minAmount));
+					}
+					if (maxAmount !== null) {
+						query += ` AND t.amount <= ?`;
+						bindings.push(Number(maxAmount));
+					}
+					if (itemCategoryId !== null) {
+						// Assuming comma-separated ids can be passed
+						const ids = itemCategoryId.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+						if (ids.length > 0) {
+							query += ` AND t.item_category_id IN (${ids.map(() => '?').join(',')})`;
+							bindings.push(...ids);
+						}
+					}
+					if (paymentCategoryId !== null) {
+						// Assuming comma-separated ids can be passed
+						const ids = paymentCategoryId.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+						if (ids.length > 0) {
+							query += ` AND t.payment_category_id IN (${ids.map(() => '?').join(',')})`;
+							bindings.push(...ids);
+						}
+					}
 
 					if (searchTerm) {
 						query += ` AND (LOWER(t.item_name) LIKE ? OR LOWER(t.notes) LIKE ?)`;
