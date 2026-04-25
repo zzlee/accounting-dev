@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import type { ItemCategory, PaymentCategory } from './App';
 import type { Transaction } from './TransactionsTable';
+import { formatDateToYYYYMMDD, parseYYYYMMDDToLocalDate } from './dateUtils';
 
 interface AddTransactionFormProps {
   show: boolean;
@@ -12,16 +13,9 @@ interface AddTransactionFormProps {
   userId: string;
 }
 
-const formatDateToYYYYMMDD = (date: Date) => {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction, userId }) => {
   const getInitialFormData = () => ({
-    transaction_date: new Date().toLocaleString("sv-SE").replace(" ", "T").split('T')[0],
+    transaction_date: formatDateToYYYYMMDD(new Date()),
     item_name: '',
     amount: 0,
     item_category_id: itemCategories[0]?.id || 0,
@@ -101,7 +95,7 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
                 <div className="mb-3">
                   <label className="form-label">日期</label>
                   <DatePicker
-                    selected={new Date(formData.transaction_date)}
+                    selected={parseYYYYMMDDToLocalDate(formData.transaction_date)}
                     onChange={handleDateChange}
                     dateFormat="yyyy-MM-dd"
                     className="form-control"

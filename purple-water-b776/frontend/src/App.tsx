@@ -3,6 +3,7 @@ import { TransactionsTable } from './TransactionsTable';
 import type { Transaction } from './TransactionsTable';
 import TransactionCard from './TransactionCard';
 import { FaChevronLeft, FaChevronRight, FaPlus, FaCog, FaFilter, FaSearch } from 'react-icons/fa';
+import { parseYYYYMMDDToLocalDate } from './dateUtils';
 
 const AddTransactionForm = lazy(() => import('./AddTransactionForm'));
 const CategoryManager = lazy(() => import('./CategoryManager'));
@@ -161,7 +162,7 @@ function App() {
 		// Add to local state and re-sort
 		setData(currentData =>
 			[...currentData, newTransaction].sort(
-				(a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime() || b.transaction_id - a.transaction_id
+				(a, b) => parseYYYYMMDDToLocalDate(b.transaction_date).getTime() - parseYYYYMMDDToLocalDate(a.transaction_date).getTime() || b.transaction_id - a.transaction_id
 			)
 		);
 	};
