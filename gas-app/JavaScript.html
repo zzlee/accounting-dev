@@ -1,0 +1,333 @@
+<script>
+  let currentYear = new Date().getFullYear();
+  let currentMonth = new Date().getMonth() + 1;
+  let transactions = [];
+  let itemCategories = [];
+  let paymentCategories = [];
+  let transactionModal;
+  let categoryModal;
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', () => {
+    transactionModal = new bootstrap.Modal(document.getElementById('transactionModal'));
+    categoryModal = new bootstrap.Modal(document.getElementById('categoryModal'));
+
+    // Set default date in add form
+    document.getElementById('tx-date').valueAsDate = new Date();
+
+    loadData();
+  });
+
+  function showLoading(show) {
+    document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+  }
+
+  function loadData() {
+    showLoading(true);
+    updateMonthDisplay();
+
+    // Load Categories first, then transactions
+    google.script.run.withSuccessHandler(res => {
+      itemCategories = res;
+      updateCategorySelects();
+
+      google.script.run.withSuccessHandler(res => {
+        paymentCategories = res;
+        updateCategorySelects();
+
+        loadTransactions();
+      }).getPaymentCategories();
+
+    }).getItemCategories();
+  }
+
+  function loadTransactions() {
+    google.script.run.withSuccessHandler(res => {
+      transactions = res;
+      renderTransactions();
+      updateSummary();
+      showLoading(false);
+    }).getTransactions(1, currentYear, currentMonth);
+  }
+
+  function updateMonthDisplay() {
+    document.getElementById('current-month-display').innerText = `${currentYear}年 ${currentMonth}月`;
+  }
+
+  function changeMonth(delta) {
+    currentMonth += delta;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear++;
+    } else if (currentMonth < 1) {
+      currentMonth = 12;
+      currentYear--;
+    }
+    loadData();
+  }
+
+  function renderTransactions() {
+    const tableBody = document.getElementById('transactions-table-body');
+    const cardsContainer = document.getElementById('transactions-cards-container');
+    const noDataMsg = document.getElementById('no-data-msg');
+
+    tableBody.innerHTML = '';
+    cardsContainer.innerHTML = '';
+
+    if (transactions.length === 0) {
+      noDataMsg.style.display = 'block';
+      document.querySelector('.desktop-table').style.display = 'none';
+      return;
+    }
+
+    noDataMsg.style.display = 'none';
+
+    // Check media query for table display
+    if (window.innerWidth > 768) {
+       document.querySelector('.desktop-table').style.display = 'table';
+    }
+
+    transactions.forEach(tx => {
+      const amountClass = tx.amount > 0 ? 'amount-expense' : 'amount-income';
+      const formattedAmount = tx.amount > 0 ? `$${tx.amount}` : `$${Math.abs(tx.amount)}`;
+
+      // Table Row
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${tx.transaction_date}</td>
+        <td>${tx.item_name}</td>
+        <td><span class="badge bg-secondary">${tx.item_category || 'N/A'}</span></td>
+        <td class="${amountClass}">${formattedAmount}</td>
+        <td>${tx.payment_category || 'N/A'}</td>
+        <td>${tx.notes || ''}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick='editTransaction(${JSON.stringify(tx)})'><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${tx.transaction_id})"><i class="fas fa-trash"></i></button>
+        </td>
+      `;
+      tableBody.appendChild(tr);
+
+      // Card
+      const card = document.createElement('div');
+      card.className = 'transaction-card';
+      card.innerHTML = `
+        <div class="card-header-custom">
+           <div class="card-title-custom">${tx.item_name}</div>
+           <div class="card-amount ${amountClass}">${formattedAmount}</div>
+        </div>
+        <div class="card-body-custom">
+           <div><i class="far fa-calendar-alt me-2"></i>${tx.transaction_date}</div>
+           <div><i class="fas fa-tags me-2"></i>${tx.item_category || 'N/A'}</div>
+           <div><i class="fas fa-wallet me-2"></i>${tx.payment_category || 'N/A'}</div>
+           ${tx.notes ? `<div><i class="fas fa-sticky-note me-2"></i>${tx.notes}</div>` : ''}
+        </div>
+        <div class="card-actions">
+           <button class="btn btn-sm btn-outline-primary" onclick='editTransaction(${JSON.stringify(tx)})'><i class="fas fa-edit"></i></button>
+           <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${tx.transaction_id})"><i class="fas fa-trash"></i></button>
+        </div>
+      `;
+      cardsContainer.appendChild(card);
+    });
+  }
+
+  function updateSummary() {
+    let income = 0;
+    let expense = 0;
+
+    transactions.forEach(tx => {
+      if (tx.amount > 0) expense += tx.amount;
+      else income += Math.abs(tx.amount);
+    });
+
+    const net = income - expense;
+
+    document.getElementById('summary-income').innerText = `$${income}`;
+    document.getElementById('summary-expense').innerText = `$${expense}`;
+
+    const netEl = document.getElementById('summary-net');
+    netEl.innerText = `$${net}`;
+    netEl.className = 'fw-bold ' + (net >= 0 ? 'amount-income' : 'amount-expense');
+  }
+
+  // --- Transactions ---
+
+  function showAddTransactionModal() {
+    document.getElementById('transactionForm').reset();
+    document.getElementById('tx-id').value = '';
+    document.getElementById('tx-date').valueAsDate = new Date();
+    document.getElementById('transactionModalTitle').innerText = '新增紀錄';
+    transactionModal.show();
+  }
+
+  function editTransaction(tx) {
+    document.getElementById('tx-id').value = tx.transaction_id;
+    document.getElementById('tx-date').value = tx.transaction_date;
+    document.getElementById('tx-item').value = tx.item_name;
+    document.getElementById('tx-item-category').value = tx.item_category_id;
+    document.getElementById('tx-amount').value = tx.amount;
+    document.getElementById('tx-payment-category').value = tx.payment_category_id;
+    document.getElementById('tx-notes').value = tx.notes;
+
+    document.getElementById('transactionModalTitle').innerText = '編輯紀錄';
+    transactionModal.show();
+  }
+
+  function saveTransaction() {
+    const form = document.getElementById('transactionForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const id = document.getElementById('tx-id').value;
+    const txData = {
+      transaction_date: document.getElementById('tx-date').value,
+      item_name: document.getElementById('tx-item').value,
+      item_category_id: document.getElementById('tx-item-category').value,
+      amount: parseFloat(document.getElementById('tx-amount').value),
+      payment_category_id: document.getElementById('tx-payment-category').value,
+      notes: document.getElementById('tx-notes').value
+    };
+
+    showLoading(true);
+    transactionModal.hide();
+
+    if (id) {
+      google.script.run.withSuccessHandler(res => {
+        if(res.success) loadData();
+        else { alert("Error: " + res.error); showLoading(false); }
+      }).updateTransaction(id, txData);
+    } else {
+      google.script.run.withSuccessHandler(res => {
+        if(res.success) loadData();
+        else { alert("Error adding"); showLoading(false); }
+      }).addTransaction(txData);
+    }
+  }
+
+  function deleteTransaction(id) {
+    if (confirm('確定要刪除這筆紀錄嗎？')) {
+      showLoading(true);
+      google.script.run.withSuccessHandler(res => {
+        if(res.success) loadData();
+        else { alert("Error: " + res.error); showLoading(false); }
+      }).deleteTransaction(id);
+    }
+  }
+
+  // --- Categories ---
+
+  function showCategoryModal() {
+    renderCategoryLists();
+    categoryModal.show();
+  }
+
+  function updateCategorySelects() {
+    const itemSelect = document.getElementById('tx-item-category');
+    const paySelect = document.getElementById('tx-payment-category');
+
+    itemSelect.innerHTML = '<option value="">請選擇...</option>';
+    itemCategories.forEach(cat => {
+      itemSelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+    });
+
+    paySelect.innerHTML = '<option value="">請選擇...</option>';
+    paymentCategories.forEach(cat => {
+      paySelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+    });
+  }
+
+  function renderCategoryLists() {
+    const itemList = document.getElementById('item-cat-list');
+    itemList.innerHTML = '';
+    itemCategories.forEach(cat => {
+      itemList.innerHTML += `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          ${cat.name}
+          <button class="btn btn-sm btn-danger" onclick="deleteCategory('item', ${cat.id})"><i class="fas fa-times"></i></button>
+        </li>
+      `;
+    });
+
+    const payList = document.getElementById('pay-cat-list');
+    payList.innerHTML = '';
+    paymentCategories.forEach(cat => {
+      payList.innerHTML += `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          ${cat.name}
+          <button class="btn btn-sm btn-danger" onclick="deleteCategory('payment', ${cat.id})"><i class="fas fa-times"></i></button>
+        </li>
+      `;
+    });
+  }
+
+  function addCategory(type) {
+    const inputId = type === 'item' ? 'new-item-cat-name' : 'new-pay-cat-name';
+    const name = document.getElementById(inputId).value.trim();
+    if (!name) return;
+
+    document.getElementById(inputId).disabled = true;
+
+    if (type === 'item') {
+      google.script.run.withSuccessHandler(res => {
+        document.getElementById(inputId).value = '';
+        document.getElementById(inputId).disabled = false;
+        if(res.success) {
+            itemCategories.push({id: res.id, name: res.name});
+            renderCategoryLists();
+            updateCategorySelects();
+        }
+      }).addItemCategory(name);
+    } else {
+      google.script.run.withSuccessHandler(res => {
+        document.getElementById(inputId).value = '';
+        document.getElementById(inputId).disabled = false;
+        if(res.success) {
+            paymentCategories.push({id: res.id, name: res.name});
+            renderCategoryLists();
+            updateCategorySelects();
+        }
+      }).addPaymentCategory(name);
+    }
+  }
+
+  function deleteCategory(type, id) {
+    if(!confirm('確定刪除此分類？若有紀錄使用此分類將無法刪除。')) return;
+
+    if (type === 'item') {
+      google.script.run.withSuccessHandler(res => {
+        if(res.success) {
+            itemCategories = itemCategories.filter(c => c.id !== id);
+            renderCategoryLists();
+            updateCategorySelects();
+        } else {
+            alert(res.error);
+        }
+      }).deleteItemCategory(id);
+    } else {
+      google.script.run.withSuccessHandler(res => {
+        if(res.success) {
+            paymentCategories = paymentCategories.filter(c => c.id !== id);
+            renderCategoryLists();
+            updateCategorySelects();
+        } else {
+            alert(res.error);
+        }
+      }).deletePaymentCategory(id);
+    }
+  }
+
+  // Handle window resize for responsive table/cards display updates
+  window.addEventListener('resize', () => {
+    if(transactions.length > 0) {
+        if (window.innerWidth > 768) {
+            document.querySelector('.desktop-table').style.display = 'table';
+            document.querySelector('.mobile-cards').style.display = 'none';
+        } else {
+            document.querySelector('.desktop-table').style.display = 'none';
+            document.querySelector('.mobile-cards').style.display = 'block';
+        }
+    }
+  });
+
+</script>
