@@ -26,19 +26,21 @@
     showLoading(true);
     updateMonthDisplay();
 
-    // Load Categories first, then transactions
+    // Fetch all required data in a single call to improve performance
     google.script.run.withSuccessHandler(res => {
-      itemCategories = res;
+      itemCategories = res.itemCategories;
+      paymentCategories = res.paymentCategories;
       updateCategorySelects();
 
-      google.script.run.withSuccessHandler(res => {
-        paymentCategories = res;
-        updateCategorySelects();
+      transactions = res.transactions;
+      renderTransactions();
+      updateSummary();
 
-        loadTransactions();
-      }).getPaymentCategories();
-
-    }).getItemCategories();
+      showLoading(false);
+    }).withFailureHandler(err => {
+      alert("載入資料失敗：" + err);
+      showLoading(false);
+    }).getAppData(1, currentYear, currentMonth);
   }
 
   function loadTransactions() {
