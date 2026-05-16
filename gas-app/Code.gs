@@ -285,3 +285,16 @@ function deleteCategoryFromSheet(sheetName, id, userId) {
   }
   return { success: false, error: "Category not found or unauthorized" };
 }
+
+// --- AGGREGATED DATA FOR PERFORMANCE ---
+function getAppData(userId = 1, year, month) {
+  const transactions = getTransactions(userId, year, month);
+  const itemCategories = getItemCategories(userId);
+  const paymentCategories = getPaymentCategories(userId);
+
+  return {
+    transactions: transactions,
+    itemCategories: itemCategories,
+    paymentCategories: paymentCategories
+  };
+}
