@@ -6,6 +6,7 @@ import { FaChevronLeft, FaChevronRight, FaPlus, FaCog, FaFilter, FaSearch } from
 import { parseYYYYMMDDToLocalDate } from './dateUtils';
 
 const AddTransactionForm = lazy(() => import('./AddTransactionForm'));
+const EditTransactionForm = lazy(() => import('./EditTransactionForm'));
 const CategoryManager = lazy(() => import('./CategoryManager'));
 
 // Define types for the categories
@@ -37,6 +38,7 @@ function App() {
 	const [itemCategories, setItemCategories] = useState<ItemCategory[]>([]);
 	const [paymentCategories, setPaymentCategories] = useState<PaymentCategory[]>([]);
 	const [showAddModal, setShowAddModal] = useState(false);
+	const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 	const [showCategoryModal, setShowCategoryModal] = useState(false);
 	const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
 	const [searchTerm, setSearchTerm] = useState('');
@@ -157,6 +159,11 @@ function App() {
 	const handleUpdateTransaction = (updatedTransaction: Transaction) => {
 		setData(currentData => currentData.map(t => (t.transaction_id === updatedTransaction.transaction_id ? updatedTransaction : t)));
 	};
+	const handleUpdateTransactionSuccess = (updatedTransaction: Transaction) => {
+		handleUpdateTransaction(updatedTransaction);
+		setEditingTransaction(null);
+	};
+
 
 	const handleAddTransaction = (newTransaction: Transaction) => {
 		// Add to local state and re-sort
@@ -305,10 +312,10 @@ function App() {
 							<div className="card">
 								<div className="card-body p-0" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
 									                                    <TransactionsTable
+																			onEditTransaction={setEditingTransaction}
 																			data={filteredData}
 																			itemCategories={itemCategories}
 																			paymentCategories={paymentCategories}
-																			onUpdateTransaction={handleUpdateTransaction}
 																			onDeleteTransaction={handleDeleteTransaction}
 																			userId={userId}
 																		/>								</div>
@@ -321,11 +328,9 @@ function App() {
 								<div className="card-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
 									                                    {filteredData.map(tx => (
 																			<TransactionCard
+																				onEditTransaction={setEditingTransaction}
 																				key={tx.transaction_id}
 																				transaction={tx}
-																				itemCategories={itemCategories}
-																				paymentCategories={paymentCategories}
-																				onUpdateTransaction={handleUpdateTransaction}
 																				onDeleteTransaction={handleDeleteTransaction}
 																				userId={userId}
 																			/>
@@ -366,7 +371,18 @@ function App() {
 										setPaymentCategories={setPaymentCategories}
 										userId={userId}
 									/>
-								)}			</Suspense>
+								)}							{editingTransaction && (
+					<EditTransactionForm
+						show={editingTransaction !== null}
+						onHide={() => setEditingTransaction(null)}
+						itemCategories={itemCategories}
+						paymentCategories={paymentCategories}
+						onUpdateTransaction={handleUpdateTransactionSuccess}
+						userId={userId}
+						transaction={editingTransaction}
+					/>
+				)}
+			</Suspense>
 		</div>
 	);
 }
