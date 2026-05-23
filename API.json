@@ -14,8 +14,8 @@
           { "name": "year", "in": "query", "schema": { "type": "string" }, "description": "Year" },
           { "name": "month", "in": "query", "schema": { "type": "string" }, "description": "Month" },
           { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search term for item name or notes" },
-          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date" },
-          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date" },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date-time" }, "description": "UTC start date-time" },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date-time" }, "description": "UTC end date-time" },
           { "name": "minAmount", "in": "query", "schema": { "type": "string" }, "description": "Minimum amount" },
           { "name": "maxAmount", "in": "query", "schema": { "type": "string" }, "description": "Maximum amount" },
           { "name": "itemCategoryId", "in": "query", "schema": { "type": "string" }, "description": "Item category ID(s), comma-separated" },
@@ -46,7 +46,7 @@
                 "required": ["transaction_date", "item_name", "item_category_id", "amount", "payment_category_id"],
                 "properties": {
                   "user_id": { "type": "integer" },
-                  "transaction_date": { "type": "string", "format": "date" },
+                  "transaction_date": { "type": "string", "format": "date-time" },
                   "item_name": { "type": "string" },
                   "item_category_id": { "type": "integer" },
                   "amount": { "type": "number" },
@@ -85,7 +85,7 @@
                 "required": ["transaction_date", "item_name", "item_category_id", "amount", "payment_category_id"],
                 "properties": {
                   "user_id": { "type": "integer" },
-                  "transaction_date": { "type": "string", "format": "date" },
+                  "transaction_date": { "type": "string", "format": "date-time" },
                   "item_name": { "type": "string" },
                   "item_category_id": { "type": "integer" },
                   "amount": { "type": "number" },
@@ -97,7 +97,14 @@
           }
         },
         "responses": {
-          "200": { "description": "Transaction updated successfully" },
+          "200": {
+            "description": "Transaction updated successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Transaction" }
+              }
+            }
+          },
           "400": { "description": "Missing required fields" },
           "404": { "description": "Transaction not found or user mismatch" }
         }
@@ -343,7 +350,7 @@
         "type": "object",
         "properties": {
           "transaction_id": { "type": "integer" },
-          "transaction_date": { "type": "string", "format": "date" },
+          "transaction_date": { "type": "string", "format": "date-time" },
           "item_name": { "type": "string" },
           "item_category": { "type": "string" },
           "payment_category": { "type": "string" },

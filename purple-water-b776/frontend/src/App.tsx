@@ -3,7 +3,7 @@ import { TransactionsTable } from './TransactionsTable';
 import type { Transaction } from './TransactionsTable';
 import TransactionCard from './TransactionCard';
 import { FaChevronLeft, FaChevronRight, FaPlus, FaCog, FaFilter, FaSearch } from 'react-icons/fa';
-import { parseYYYYMMDDToLocalDate } from './dateUtils';
+import { getTransactionDateTimestamp, getTransactionMonthUtcRange } from './dateUtils';
 
 const AddTransactionForm = lazy(() => import('./AddTransactionForm'));
 const EditTransactionForm = lazy(() => import('./EditTransactionForm'));
@@ -55,41 +55,38 @@ function App() {
 		};
 	}, [searchTerm]);
 
-	    // Fetch transactions
-	    useEffect(() => {
-	        const year = currentDate.getFullYear();
-	        const month = currentDate.getMonth() + 1;
-	        const params = new URLSearchParams({
-	            year: year.toString(),
-	            month: month.toString(),
-	            'user-id': userId, // Add user-id
-	        });
-	
-	        if (debouncedSearchTerm) {
-	            params.append('search', debouncedSearchTerm);
-	        }
-	
-	        const apiUrl = `/api/transactions?${params.toString()}`;
-	
-	        setIsLoading(true);
-	        fetch(apiUrl)
-	            .then(res => {
-	                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-	                return res.json();
-	            })
-	            .then(responseData => {
-	                setData(responseData as Transaction[]);
-	                // Reset category filter when month or search term changes, but not on initial load if there's a search term
-	                if (selectedCategoryIds.size > 0) {
-	                    setSelectedCategoryIds(new Set());
-	                }
-	            })
-	            .catch(err => {
-	                setError(err as Error);
-	                setData([]); // Clear data on error
-	            })
-	            .finally(() => setIsLoading(false));
-	    }, [currentDate, debouncedSearchTerm, userId]);
+	// Fetch transactions
+	useEffect(() => {
+		const { startDate, endDate } = getTransactionMonthUtcRange(currentDate);
+		const params = new URLSearchParams({
+			startDate,
+			endDate,
+			'user-id': userId,
+		});
+
+		if (debouncedSearchTerm) {
+			params.append('search', debouncedSearchTerm);
+		}
+
+		const apiUrl = `/api/transactions?${params.toString()}`;
+
+		setIsLoading(true);
+		fetch(apiUrl)
+			.then(res => {
+				if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+				return res.json();
+			})
+			.then(responseData => {
+				setData(responseData as Transaction[]);
+				// Reset category filter when month or search term changes, but not on initial load if there's a search term
+				setSelectedCategoryIds(prev => (prev.size > 0 ? new Set() : prev));
+			})
+			.catch(err => {
+				setError(err as Error);
+				setData([]); // Clear data on error
+			})
+			.finally(() => setIsLoading(false));
+	}, [currentDate, debouncedSearchTerm, userId]);
 	    // Fetch categories on initial load
 	    useEffect(() => {
 	        const params = new URLSearchParams({ 'user-id': userId });
@@ -167,11 +164,7 @@ function App() {
 
 	const handleAddTransaction = (newTransaction: Transaction) => {
 		// Add to local state and re-sort
-		setData(currentData =>
-			[...currentData, newTransaction].sort(
-				(a, b) => parseYYYYMMDDToLocalDate(b.transaction_date).getTime() - parseYYYYMMDDToLocalDate(a.transaction_date).getTime() || b.transaction_id - a.transaction_id
-			)
-		);
+		setData(currentData => [...currentData, newTransaction].sort((a, b) => getTransactionDateTimestamp(b.transaction_date) - getTransactionDateTimestamp(a.transaction_date) || b.transaction_id - a.transaction_id));
 	};
 
 	const handleDeleteTransaction = (transactionId: number) => {

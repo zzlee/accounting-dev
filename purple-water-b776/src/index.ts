@@ -22,6 +22,78 @@ function addCorsHeaders(response: Response): Response {
 
 const DEFAULT_USER_ID = 1; // Add default user ID
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+type TransactionRow = {
+	transaction_id: number;
+	transaction_date: string;
+	item_name: string;
+	item_category: string | null;
+	payment_category: string | null;
+	amount: number;
+	notes: string | null;
+	item_category_id: number;
+	payment_category_id: number;
+};
+
+function normalizeToUtcIso(value: unknown): string | null {
+	if (typeof value !== 'string' || value.trim() === '') {
+		return null;
+	}
+
+	const input = value.trim();
+	if (DATE_ONLY_REGEX.test(input)) {
+		return `${input}T00:00:00.000Z`;
+	}
+
+	const parsed = new Date(input);
+	if (Number.isNaN(parsed.getTime())) {
+		return null;
+	}
+
+	return parsed.toISOString();
+}
+
+function normalizeTransactionRow(row: unknown): TransactionRow {
+	const transaction = row as TransactionRow;
+	return {
+		...transaction,
+		transaction_date: normalizeToUtcIso(transaction.transaction_date) ?? transaction.transaction_date,
+	};
+}
+
+function getYearMonthUtcRange(year: string, month: string): { startDateUtc: string; endDateUtc: string } | null {
+	const yearNumber = Number(year);
+	const monthNumber = Number(month);
+	if (!Number.isInteger(yearNumber) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+		return null;
+	}
+
+	const monthStartUtc = new Date(Date.UTC(yearNumber, monthNumber - 1, 1, 0, 0, 0, 0));
+	const nextMonthStartUtc = new Date(Date.UTC(yearNumber, monthNumber, 1, 0, 0, 0, 0));
+	const monthEndUtc = new Date(nextMonthStartUtc.getTime() - 1);
+
+	return {
+		startDateUtc: monthStartUtc.toISOString(),
+		endDateUtc: monthEndUtc.toISOString(),
+	};
+}
+
+function getCurrentMonthUtcRange(): { startDateUtc: string; endDateUtc: string } {
+	const now = new Date();
+	const year = now.getUTCFullYear();
+	const month = now.getUTCMonth();
+
+	const monthStartUtc = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+	const nextMonthStartUtc = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
+	const monthEndUtc = new Date(nextMonthStartUtc.getTime() - 1);
+
+	return {
+		startDateUtc: monthStartUtc.toISOString(),
+		endDateUtc: monthEndUtc.toISOString(),
+	};
+}
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
@@ -41,8 +113,8 @@ export default {
 					const year = url.searchParams.get('year');
 					const month = url.searchParams.get('month');
 					const searchTerm = url.searchParams.get('search');
-					const startDate = url.searchParams.get('startDate');
-					const endDate = url.searchParams.get('endDate');
+					const startDate = normalizeToUtcIso(url.searchParams.get('startDate'));
+					const endDate = normalizeToUtcIso(url.searchParams.get('endDate'));
 					const minAmount = url.searchParams.get('minAmount');
 					const maxAmount = url.searchParams.get('maxAmount');
 					const itemCategoryId = url.searchParams.get('itemCategoryId');
@@ -67,28 +139,21 @@ export default {
 					const bindings: (string | number)[] = [userId];
 
 					if (startDate && endDate) {
-						query += ` AND t.transaction_date >= ? AND t.transaction_date <= ?`;
+						query += ` AND datetime(t.transaction_date) >= datetime(?) AND datetime(t.transaction_date) <= datetime(?)`;
 						bindings.push(startDate, endDate);
 					} else if (startDate) {
-						query += ` AND t.transaction_date >= ?`;
+						query += ` AND datetime(t.transaction_date) >= datetime(?)`;
 						bindings.push(startDate);
 					} else if (endDate) {
-						query += ` AND t.transaction_date <= ?`;
+						query += ` AND datetime(t.transaction_date) <= datetime(?)`;
 						bindings.push(endDate);
 					} else {
-						// Fallback to year/month or current year/month
-						let yearMonth;
-						if (year && month) {
-							const monthPadded = month.padStart(2, '0');
-							yearMonth = `${year}-${monthPadded}`;
-						} else {
-							const now = new Date();
-							const currentYear = now.getFullYear();
-							const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
-							yearMonth = `${currentYear}-${currentMonth}`;
+						const monthRange = year && month ? getYearMonthUtcRange(year, month) : getCurrentMonthUtcRange();
+						if (!monthRange) {
+							return addCorsHeaders(new Response('Invalid year/month query params', { status: 400 }));
 						}
-						query += ` AND strftime('%Y-%m', t.transaction_date) = ?`;
-						bindings.push(yearMonth);
+						query += ` AND datetime(t.transaction_date) >= datetime(?) AND datetime(t.transaction_date) <= datetime(?)`;
+						bindings.push(monthRange.startDateUtc, monthRange.endDateUtc);
 					}
 
 					if (minAmount !== null) {
@@ -122,11 +187,12 @@ export default {
 						bindings.push(searchTermLike, searchTermLike);
 					}
 
-					query += ` ORDER BY t.transaction_date DESC, t.transaction_id DESC;`;
+					query += ` ORDER BY datetime(t.transaction_date) DESC, t.transaction_id DESC;`;
 
 					const { results } = await env.accounting.prepare(query).bind(...bindings).all();
+					const normalizedResults = (results ?? []).map(normalizeTransactionRow);
 
-					const jsonResponse = new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
+					const jsonResponse = new Response(JSON.stringify(normalizedResults), { headers: { 'Content-Type': 'application/json' } });
 					return addCorsHeaders(jsonResponse);
 				}
 
@@ -140,38 +206,47 @@ export default {
 							return addCorsHeaders(new Response('Missing required fields', { status: 400 }));
 						}
 
+						const transactionDateUtc = normalizeToUtcIso(body.transaction_date);
+						if (!transactionDateUtc) {
+							return addCorsHeaders(new Response('Invalid transaction_date. Must be a valid date-time.', { status: 400 }));
+						}
+
 						const result = await env.accounting.prepare(
 							`INSERT INTO transactions (user_id, transaction_date, item_name, item_category_id, amount, payment_category_id, notes)
 							 VALUES (?, ?, ?, ?, ?, ?, ?)`
 						).bind(
 							userId,
-							body.transaction_date,
+							transactionDateUtc,
 							body.item_name,
 							body.item_category_id,
 							body.amount,
 							body.payment_category_id,
 							body.notes || null
 						).run();
-            
-            const newTxId = result.meta.last_row_id;
-            const newTx = await env.accounting.prepare(
-              `SELECT
-                t.transaction_id,
-                t.transaction_date,
-                t.item_name,
-                ic.name as item_category,
-                pc.name as payment_category,
-                t.amount,
-                t.notes,
-                t.item_category_id,
-                t.payment_category_id
-              FROM transactions t
-              LEFT JOIN item_categories ic ON t.item_category_id = ic.id
-              LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
-              WHERE t.transaction_id = ?`
-            ).bind(newTxId).first();
 
-						return addCorsHeaders(new Response(JSON.stringify(newTx), { status: 201 }));
+						const newTxId = result.meta.last_row_id;
+						const newTx = await env.accounting.prepare(
+							`SELECT
+								t.transaction_id,
+								t.transaction_date,
+								t.item_name,
+								ic.name as item_category,
+								pc.name as payment_category,
+								t.amount,
+								t.notes,
+								t.item_category_id,
+								t.payment_category_id
+							FROM transactions t
+							LEFT JOIN item_categories ic ON t.item_category_id = ic.id
+							LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
+							WHERE t.transaction_id = ? AND t.user_id = ?`
+						).bind(newTxId, userId).first();
+
+						const jsonResponse = new Response(JSON.stringify(newTx ? normalizeTransactionRow(newTx) : null), {
+							status: 201,
+							headers: { 'Content-Type': 'application/json' },
+						});
+						return addCorsHeaders(jsonResponse);
 					} catch (e: any) {
 						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 					}
@@ -395,23 +470,49 @@ export default {
 							return addCorsHeaders(new Response('Missing required fields', { status: 400 }));
 						}
 
+						const transactionDateUtc = normalizeToUtcIso(body.transaction_date);
+						if (!transactionDateUtc) {
+							return addCorsHeaders(new Response('Invalid transaction_date. Must be a valid date-time.', { status: 400 }));
+						}
+
 						const result = await env.accounting.prepare(
-								`UPDATE transactions
+							`UPDATE transactions
 							 SET transaction_date = ?, item_name = ?, item_category_id = ?, amount = ?, payment_category_id = ?, notes = ?
 							 WHERE transaction_id = ? AND user_id = ?`
 						).bind(
-								body.transaction_date,
-								body.item_name,
-								body.item_category_id,
-								body.amount,
-								body.payment_category_id,
-								body.notes || null,
-								transactionId,
-								userId
+							transactionDateUtc,
+							body.item_name,
+							body.item_category_id,
+							body.amount,
+							body.payment_category_id,
+							body.notes || null,
+							transactionId,
+							userId
 						).run();
 
 						if (result.meta.changes > 0) {
-							return addCorsHeaders(new Response(JSON.stringify({ message: 'Transaction updated successfully' }), { status: 200 }));
+							const updatedTx = await env.accounting.prepare(
+								`SELECT
+									t.transaction_id,
+									t.transaction_date,
+									t.item_name,
+									ic.name as item_category,
+									pc.name as payment_category,
+									t.amount,
+									t.notes,
+									t.item_category_id,
+									t.payment_category_id
+								FROM transactions t
+								LEFT JOIN item_categories ic ON t.item_category_id = ic.id
+								LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
+								WHERE t.transaction_id = ? AND t.user_id = ?`
+							).bind(transactionId, userId).first();
+
+							const jsonResponse = new Response(JSON.stringify(updatedTx ? normalizeTransactionRow(updatedTx) : null), {
+								status: 200,
+								headers: { 'Content-Type': 'application/json' },
+							});
+							return addCorsHeaders(jsonResponse);
 						} else {
 							return addCorsHeaders(new Response('Transaction not found or user mismatch', { status: 404 }));
 						}

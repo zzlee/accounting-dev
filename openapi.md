@@ -36,15 +36,17 @@ paths:
         - name: startDate
           in: query
           required: false
+          description: UTC start date-time
           schema:
             type: string
-            format: date
+            format: date-time
         - name: endDate
           in: query
           required: false
+          description: UTC end date-time
           schema:
             type: string
-            format: date
+            format: date-time
         - name: minAmount
           in: query
           required: false
@@ -119,11 +121,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Transaction updated successfully
+                $ref: '#/components/schemas/Transaction'
         '400':
           description: Missing required fields
         '404':
@@ -386,7 +384,7 @@ components:
           type: integer
         transaction_date:
           type: string
-          format: date
+          format: date-time
         item_name:
           type: string
         item_category:
@@ -410,7 +408,7 @@ components:
           default: 1
         transaction_date:
           type: string
-          format: date
+          format: date-time
         item_name:
           type: string
         item_category_id:

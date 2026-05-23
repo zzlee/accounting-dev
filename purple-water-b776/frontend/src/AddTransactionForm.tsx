@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
-import DatePicker from 'react-datepicker';
+import { useState, useEffect, useCallback } from 'react';
 import type { ItemCategory, PaymentCategory } from './App';
 import type { Transaction } from './TransactionsTable';
-import { formatDateToYYYYMMDD, parseYYYYMMDDToLocalDate } from './dateUtils';
+import { getDefaultTransactionLocalDateTime, localDateTimeInputToUtcIso } from './dateUtils';
 
 interface AddTransactionFormProps {
   show: boolean;
@@ -14,14 +13,14 @@ interface AddTransactionFormProps {
 }
 
 const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, itemCategories, paymentCategories, onAddTransaction, userId }) => {
-  const getInitialFormData = () => ({
-    transaction_date: formatDateToYYYYMMDD(new Date()),
+  const getInitialFormData = useCallback(() => ({
+    transaction_date: getDefaultTransactionLocalDateTime(),
     item_name: '',
     amount: 0,
     item_category_id: itemCategories[0]?.id || 0,
     payment_category_id: paymentCategories[0]?.id || 0,
     notes: '',
-  });
+  }), [itemCategories, paymentCategories]);
 
   const [formData, setFormData] = useState(getInitialFormData());
 
@@ -30,17 +29,16 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
     if (show) {
       setFormData(getInitialFormData());
     }
-  }, [show, itemCategories, paymentCategories]);
+  }, [show, getInitialFormData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleDateChange = (date: Date | null) => {
-    if (date) {
-      setFormData(prev => ({ ...prev, transaction_date: formatDateToYYYYMMDD(date) }));
-    }
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setFormData(prev => ({ ...prev, transaction_date: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,12 +48,19 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
       return;
     }
 
+    const transactionDateUtc = localDateTimeInputToUtcIso(formData.transaction_date);
+    if (!transactionDateUtc) {
+      alert('請輸入有效的日期時間');
+      return;
+    }
+
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          transaction_date: transactionDateUtc,
           amount: Number(formData.amount),
           item_category_id: Number(formData.item_category_id),
           payment_category_id: Number(formData.payment_category_id),
@@ -93,11 +98,11 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ show, onHide, i
               </div>
               <div className="modal-body">
                 <div className="mb-3">
-                  <label className="form-label">日期</label>
-                  <DatePicker
-                    selected={parseYYYYMMDDToLocalDate(formData.transaction_date)}
+                  <label className="form-label">日期時間</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.transaction_date}
                     onChange={handleDateChange}
-                    dateFormat="yyyy-MM-dd"
                     className="form-control"
                     required
                   />

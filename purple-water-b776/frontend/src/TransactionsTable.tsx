@@ -42,7 +42,7 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
 		}
 
 		try {
-			const response = await fetch(`/api/transactions/${transactionId}?user_id=${userId}`, {
+			const response = await fetch(`/api/transactions/${transactionId}?user-id=${userId}`, {
 				method: 'DELETE',
 			});
 

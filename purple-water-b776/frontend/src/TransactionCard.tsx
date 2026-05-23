@@ -15,7 +15,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, onDelete
 		}
 
 		try {
-			const response = await fetch(`/api/transactions/${transaction.transaction_id}?user_id=${userId}`, {
+			const response = await fetch(`/api/transactions/${transaction.transaction_id}?user-id=${userId}`, {
 				method: 'DELETE',
 			});
 
