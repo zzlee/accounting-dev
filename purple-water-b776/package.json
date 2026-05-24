@@ -2,6 +2,9 @@
 	"name": "purple-water-b776",
 	"version": "0.0.0",
 	"private": true,
+	"workspaces": [
+		"frontend"
+	],
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
