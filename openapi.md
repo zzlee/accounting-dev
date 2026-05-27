@@ -36,14 +36,14 @@ paths:
         - name: startDate
           in: query
           required: false
-          description: UTC start date-time
+          description: UTC start date-time. Can be a full ISO 8601 string or YYYY-MM-DD (normalized to UTC midnight, e.g., YYYY-MM-DDT00:00:00.000Z).
           schema:
             type: string
             format: date-time
         - name: endDate
           in: query
           required: false
-          description: UTC end date-time
+          description: UTC end date-time. Can be a full ISO 8601 string or YYYY-MM-DD (normalized to UTC midnight, e.g., YYYY-MM-DDT00:00:00.000Z).
           schema:
             type: string
             format: date-time
@@ -362,12 +362,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  name:
-                    type: string
+                $ref: '#/components/schemas/User'
         '400':
           description: User name is required
         '409':
@@ -385,12 +380,15 @@ components:
         transaction_date:
           type: string
           format: date-time
+          description: Normalized UTC ISO 8601 date-time string.
         item_name:
           type: string
         item_category:
           type: string
+          nullable: true
         payment_category:
           type: string
+          nullable: true
         amount:
           type: number
         notes:
@@ -409,6 +407,7 @@ components:
         transaction_date:
           type: string
           format: date-time
+          description: Transaction date-time. Supports full ISO 8601 strings (normalized to UTC) or YYYY-MM-DD format (normalized to UTC midnight, e.g., YYYY-MM-DDT00:00:00.000Z).
         item_name:
           type: string
         item_category_id:
@@ -443,4 +442,11 @@ components:
           default: 1
       required:
         - name
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
 ```
