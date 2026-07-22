@@ -79,6 +79,19 @@ function getYearMonthUtcRange(year: string, month: string): { startDateUtc: stri
 	};
 }
 
+function parseCommaSeparatedIds(idString: string): number[] {
+	const ids: number[] = [];
+	let start = 0;
+	while (start < idString.length) {
+		let end = idString.indexOf(',', start);
+		if (end === -1) end = idString.length;
+		const id = Number(idString.substring(start, end).trim());
+		if (!Number.isNaN(id)) ids.push(id);
+		start = end + 1;
+	}
+	return ids;
+}
+
 function getCurrentMonthUtcRange(): { startDateUtc: string; endDateUtc: string } {
 	const now = new Date();
 	const year = now.getUTCFullYear();
@@ -249,25 +262,17 @@ export default {
 					}
 					if (itemCategoryId !== null) {
 						// Assuming comma-separated ids can be passed
-						const ids = itemCategoryId.split(',').reduce((acc, idStr) => {
-							const id = Number(idStr.trim());
-							if (!isNaN(id)) acc.push(id);
-							return acc;
-						}, [] as number[]);
+						const ids = parseCommaSeparatedIds(itemCategoryId);
 						if (ids.length > 0) {
-							query += ` AND t.item_category_id IN (${ids.map(() => '?').join(',')})`;
+							query += ` AND t.item_category_id IN (${Array(ids.length).fill('?').join(',')})`;
 							bindings.push(...ids);
 						}
 					}
 					if (paymentCategoryId !== null) {
 						// Assuming comma-separated ids can be passed
-						const ids = paymentCategoryId.split(',').reduce((acc, idStr) => {
-							const id = Number(idStr.trim());
-							if (!isNaN(id)) acc.push(id);
-							return acc;
-						}, [] as number[]);
+						const ids = parseCommaSeparatedIds(paymentCategoryId);
 						if (ids.length > 0) {
-							query += ` AND t.payment_category_id IN (${ids.map(() => '?').join(',')})`;
+							query += ` AND t.payment_category_id IN (${Array(ids.length).fill('?').join(',')})`;
 							bindings.push(...ids);
 						}
 					}
