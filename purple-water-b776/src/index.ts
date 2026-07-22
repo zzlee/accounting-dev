@@ -94,6 +94,89 @@ function getCurrentMonthUtcRange(): { startDateUtc: string; endDateUtc: string }
 	};
 }
 
+async function handleCategoryCollectionRequest(request: Request, url: URL, env: Env, tableName: 'item_categories' | 'payment_categories'): Promise<Response | null> {
+	if (request.method === 'GET') {
+		const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
+		const { results } = await env.accounting.prepare(`SELECT id, name FROM ${tableName} WHERE user_id = ? ORDER BY name`).bind(userId).all();
+		return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
+	}
+
+	if (request.method === 'POST') {
+		try {
+			const body = await request.json<{ name: string, user_id?: number }>();
+			const userId = body.user_id || DEFAULT_USER_ID;
+			if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+				return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+			}
+
+			const result = await env.accounting.prepare(
+				`INSERT INTO ${tableName} (user_id, name) VALUES (?, ?)`
+			).bind(userId, body.name.trim()).run();
+
+			const newId = result.meta.last_row_id;
+			const newCategory = { id: newId, name: body.name.trim() };
+
+			return addCorsHeaders(new Response(JSON.stringify(newCategory), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+		} catch (e: any) {
+			return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+		}
+	}
+
+	return null;
+}
+
+async function handleCategoryItemRequest(request: Request, url: URL, env: Env, categoryId: number, tableName: 'item_categories' | 'payment_categories', foreignKeyName: 'item_category_id' | 'payment_category_id'): Promise<Response | null> {
+	if (request.method === 'PUT') {
+		try {
+			const body = await request.json<{ name: string, user_id?: number }>();
+			const userId = body.user_id || DEFAULT_USER_ID;
+			if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
+				return addCorsHeaders(new Response('Category name is required', { status: 400 }));
+			}
+
+			const result = await env.accounting.prepare(
+				`UPDATE ${tableName} SET name = ? WHERE id = ? AND user_id = ?`
+			).bind(body.name.trim(), categoryId, userId).run();
+
+			if (result.meta.changes > 0) {
+				const updatedCategory = { id: categoryId, name: body.name.trim() };
+				return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+			} else {
+				return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+			}
+		} catch (e: any) {
+			return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+		}
+	}
+
+	if (request.method === 'DELETE') {
+		try {
+			const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
+			const usageCheck = await env.accounting.prepare(
+				`SELECT 1 FROM transactions WHERE ${foreignKeyName} = ? AND user_id = ? LIMIT 1`
+			).bind(categoryId, userId).first();
+
+			if (usageCheck) {
+				return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
+			}
+
+			const result = await env.accounting.prepare(
+				`DELETE FROM ${tableName} WHERE id = ? AND user_id = ?`
+			).bind(categoryId, userId).run();
+
+			if (result.meta.changes > 0) {
+				return addCorsHeaders(new Response(null, { status: 204 }));
+			} else {
+				return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
+			}
+		} catch (e: any) {
+			return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+		}
+	}
+
+	return null;
+}
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
@@ -255,178 +338,30 @@ export default {
 
 			// Handle /api/item-categories
 			if (url.pathname === '/api/item-categories') {
-				// GET /api/item-categories
-				if (request.method === 'GET') {
-					const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
-					const { results } = await env.accounting.prepare("SELECT id, name FROM item_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
-					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
-				}
-
-				// POST /api/item-categories
-				if (request.method === 'POST') {
-					try {
-						const body = await request.json<{ name: string, user_id?: number }>();
-						const userId = body.user_id || DEFAULT_USER_ID;
-						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
-							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							`INSERT INTO item_categories (user_id, name) VALUES (?, ?)`
-						).bind(userId, body.name.trim()).run();
-
-						const newId = result.meta.last_row_id;
-						const newCategory = { id: newId, name: body.name.trim() };
-
-						return addCorsHeaders(new Response(JSON.stringify(newCategory), { status: 201, headers: { 'Content-Type': 'application/json' } }));
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
+				const response = await handleCategoryCollectionRequest(request, url, env, 'item_categories');
+				if (response) return response;
 			}
 
 			// Handle /api/payment-categories
 			if (url.pathname === '/api/payment-categories') {
-				// GET /api/payment-categories
-				if (request.method === 'GET') {
-					const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
-					const { results } = await env.accounting.prepare("SELECT id, name FROM payment_categories WHERE user_id = ? ORDER BY name").bind(userId).all();
-					return addCorsHeaders(new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } }));
-				}
-
-				// POST /api/payment-categories
-				if (request.method === 'POST') {
-					try {
-						const body = await request.json<{ name: string, user_id?: number }>();
-						const userId = body.user_id || DEFAULT_USER_ID;
-						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
-							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							`INSERT INTO payment_categories (user_id, name) VALUES (?, ?)`
-						).bind(userId, body.name.trim()).run();
-
-						const newId = result.meta.last_row_id;
-						const newCategory = { id: newId, name: body.name.trim() };
-
-						return addCorsHeaders(new Response(JSON.stringify(newCategory), { status: 201, headers: { 'Content-Type': 'application/json' } }));
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
+				const response = await handleCategoryCollectionRequest(request, url, env, 'payment_categories');
+				if (response) return response;
 			}
 
 			// Handle /api/item-categories/:id
 			const itemCategoryMatch = url.pathname.match(/^\/api\/item-categories\/(\d+)$/);
 			if (itemCategoryMatch) {
 				const categoryId = parseInt(itemCategoryMatch[1], 10);
-
-				// PUT /api/item-categories/:id
-				if (request.method === 'PUT') {
-					try {
-						const body = await request.json<{ name: string, user_id?: number }>();
-						const userId = body.user_id || DEFAULT_USER_ID;
-						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
-							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							`UPDATE item_categories SET name = ? WHERE id = ? AND user_id = ?`
-						).bind(body.name.trim(), categoryId, userId).run();
-
-						if (result.meta.changes > 0) {
-							const updatedCategory = { id: categoryId, name: body.name.trim() };
-							return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-						} else {
-							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
-						}
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
-
-				// DELETE /api/item-categories/:id
-				if (request.method === 'DELETE') {
-					try {
-						const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
-						const usageCheck = await env.accounting.prepare(
-							`SELECT 1 FROM transactions WHERE item_category_id = ? AND user_id = ? LIMIT 1`
-						).bind(categoryId, userId).first();
-
-						if (usageCheck) {
-							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							'DELETE FROM item_categories WHERE id = ? AND user_id = ?'
-						).bind(categoryId, userId).run();
-
-						if (result.meta.changes > 0) {
-							return addCorsHeaders(new Response(null, { status: 204 }));
-						} else {
-							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
-						}
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
+				const response = await handleCategoryItemRequest(request, url, env, categoryId, 'item_categories', 'item_category_id');
+				if (response) return response;
 			}
 
 			// Handle /api/payment-categories/:id
 			const paymentCategoryMatch = url.pathname.match(/^\/api\/payment-categories\/(\d+)$/);
 			if (paymentCategoryMatch) {
 				const categoryId = parseInt(paymentCategoryMatch[1], 10);
-
-				// PUT /api/payment-categories/:id
-				if (request.method === 'PUT') {
-					try {
-						const body = await request.json<{ name: string, user_id?: number }>();
-						const userId = body.user_id || DEFAULT_USER_ID;
-						if (!body || !body.name || typeof body.name !== 'string' || body.name.trim() === '') {
-							return addCorsHeaders(new Response('Category name is required', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							`UPDATE payment_categories SET name = ? WHERE id = ? AND user_id = ?`
-						).bind(body.name.trim(), categoryId, userId).run();
-
-						if (result.meta.changes > 0) {
-							const updatedCategory = { id: categoryId, name: body.name.trim() };
-							return addCorsHeaders(new Response(JSON.stringify(updatedCategory), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-						} else {
-							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
-						}
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
-
-				// DELETE /api/payment-categories/:id
-				if (request.method === 'DELETE') {
-					try {
-						const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
-						const usageCheck = await env.accounting.prepare(
-							`SELECT 1 FROM transactions WHERE payment_category_id = ? AND user_id = ? LIMIT 1`
-						).bind(categoryId, userId).first();
-
-						if (usageCheck) {
-							return addCorsHeaders(new Response('Cannot delete category: it is currently in use by one or more transactions.', { status: 400 }));
-						}
-
-						const result = await env.accounting.prepare(
-							'DELETE FROM payment_categories WHERE id = ? AND user_id = ?'
-						).bind(categoryId, userId).run();
-
-						if (result.meta.changes > 0) {
-							return addCorsHeaders(new Response(null, { status: 204 }));
-						} else {
-							return addCorsHeaders(new Response('Category not found or user mismatch', { status: 404 }));
-						}
-					} catch (e: any) {
-						return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
-					}
-				}
+				const response = await handleCategoryItemRequest(request, url, env, categoryId, 'payment_categories', 'payment_category_id');
+				if (response) return response;
 			}
 
 			// Handle /api/users
