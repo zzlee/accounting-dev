@@ -249,7 +249,11 @@ export default {
 					}
 					if (itemCategoryId !== null) {
 						// Assuming comma-separated ids can be passed
-						const ids = itemCategoryId.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+						const ids = itemCategoryId.split(',').reduce((acc, idStr) => {
+							const id = Number(idStr.trim());
+							if (!isNaN(id)) acc.push(id);
+							return acc;
+						}, [] as number[]);
 						if (ids.length > 0) {
 							query += ` AND t.item_category_id IN (${ids.map(() => '?').join(',')})`;
 							bindings.push(...ids);
@@ -257,7 +261,11 @@ export default {
 					}
 					if (paymentCategoryId !== null) {
 						// Assuming comma-separated ids can be passed
-						const ids = paymentCategoryId.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+						const ids = paymentCategoryId.split(',').reduce((acc, idStr) => {
+							const id = Number(idStr.trim());
+							if (!isNaN(id)) acc.push(id);
+							return acc;
+						}, [] as number[]);
 						if (ids.length > 0) {
 							query += ` AND t.payment_category_id IN (${ids.map(() => '?').join(',')})`;
 							bindings.push(...ids);
