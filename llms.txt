@@ -1,0 +1,10 @@
+# Personal Consumption Record Web App
+
+> A Personal Consumption Record Web App utilizing a Cloudflare Worker backend.
+
+## Documentation
+
+- [README](README.md): Project overview and setup
+- [OpenAPI](openapi.md): REST API Documentation
+- [API](API.json): REST API JSON format
+- [GEMINI](GEMINI.md): Web App Design Progress Summary
