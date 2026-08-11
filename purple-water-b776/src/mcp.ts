@@ -1,152 +1,91 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { JSONRPCMessage, JSONRPCMessageSchema, ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { createMcpHandler } from 'agents/mcp/server';
+import { z } from 'zod';
 
-export class CloudflareSSEServerTransport {
-	private writer: WritableStreamDefaultWriter<Uint8Array>;
-	private encoder = new TextEncoder();
+export function createServer(env: Env) {
+	const server = new McpServer({
+		name: 'accounting-dev',
+		version: '1.0.0',
+	});
 
-	public onclose?: () => void;
-	public onerror?: (error: Error) => void;
-	public onmessage?: (message: JSONRPCMessage) => void;
-
-	constructor(
-		public readonly sessionId: string,
-		private readonly _endpoint: string,
-		writer: WritableStreamDefaultWriter<Uint8Array>
-	) {
-		this.writer = writer;
-	}
-
-	async start() {
-		const endpointUrl = new URL(this._endpoint, 'http://localhost');
-		endpointUrl.searchParams.set('sessionId', this.sessionId);
-		const relativeUrlWithSession = endpointUrl.pathname + endpointUrl.search + endpointUrl.hash;
-
-		await this.writer.write(this.encoder.encode(`event: endpoint\ndata: ${relativeUrlWithSession}\n\n`));
-	}
-
-	async handlePostMessage(body: any) {
-		try {
-			await this.handleMessage(typeof body === 'string' ? JSON.parse(body) : body);
-		} catch (error) {
-			this.onerror?.(error as Error);
-			throw error;
-		}
-	}
-
-	async handleMessage(message: any) {
-		let parsedMessage;
-		try {
-			parsedMessage = JSONRPCMessageSchema.parse(message);
-		} catch (error) {
-			this.onerror?.(error as Error);
-			throw error;
-		}
-		this.onmessage?.(parsedMessage);
-	}
-
-	async close() {
-		try {
-			await this.writer.close();
-		} catch {
-			// ignore
-		}
-		this.onclose?.();
-	}
-
-	async send(message: JSONRPCMessage) {
-		await this.writer.write(this.encoder.encode(`event: message\ndata: ${JSON.stringify(message)}\n\n`));
-	}
-}
-
-export const activeTransports = new Map<string, CloudflareSSEServerTransport>();
-
-export function setupMcpServer(env: any): Server {
-	const server = new Server(
+	server.registerTool(
+		'get_transactions',
 		{
-			name: 'accounting-mcp',
-			version: '1.0.0',
-		},
-		{
-			capabilities: {
-				tools: {},
+			description: 'Get all transactions',
+			inputSchema: {
+				user_id: z.number().optional().describe('User ID (default 1)'),
 			},
+		},
+		async ({ user_id }) => {
+			const userId = user_id || 1;
+			const { results } = await env.accounting
+				.prepare(
+					`SELECT t.transaction_id, t.transaction_date, t.item_name, ic.name as item_category,
+					 pc.name as payment_category, t.amount, t.notes
+					 FROM transactions t
+					 LEFT JOIN item_categories ic ON t.item_category_id = ic.id
+					 LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
+					 WHERE t.user_id = ?
+					 ORDER BY t.transaction_date DESC LIMIT 50`
+				)
+				.bind(userId)
+				.all();
+
+			return {
+				content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
+			};
 		}
 	);
 
-	server.setRequestHandler(ListToolsRequestSchema, async () => {
-		return {
-			tools: [
-				{
-					name: 'get_transactions',
-					description: 'Get all transactions',
-					inputSchema: {
-						type: 'object',
-						properties: {
-							user_id: { type: 'number', description: 'User ID (default 1)' },
-						}
-					},
-				},
-				{
-					name: 'get_item_categories',
-					description: 'Get all item categories',
-					inputSchema: {
-						type: 'object',
-						properties: {
-							user_id: { type: 'number', description: 'User ID (default 1)' },
-						}
-					},
-				},
-				{
-					name: 'get_payment_categories',
-					description: 'Get all payment categories',
-					inputSchema: {
-						type: 'object',
-						properties: {
-							user_id: { type: 'number', description: 'User ID (default 1)' },
-						}
-					},
-				}
-			],
-		};
-	});
-
-	server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
-		const { name, arguments: args } = request.params;
-		const userId = args?.user_id || 1;
-
-		if (name === 'get_transactions') {
-			const { results } = await env.accounting.prepare(
-				`SELECT t.transaction_id, t.transaction_date, t.item_name, ic.name as item_category,
-				 pc.name as payment_category, t.amount, t.notes
-				 FROM transactions t
-				 LEFT JOIN item_categories ic ON t.item_category_id = ic.id
-				 LEFT JOIN payment_categories pc ON t.payment_category_id = pc.id
-				 WHERE t.user_id = ?
-				 ORDER BY t.transaction_date DESC LIMIT 50`
-			).bind(userId).all();
+	server.registerTool(
+		'get_item_categories',
+		{
+			description: 'Get all item categories',
+			inputSchema: {
+				user_id: z.number().optional().describe('User ID (default 1)'),
+			},
+		},
+		async ({ user_id }) => {
+			const userId = user_id || 1;
+			const { results } = await env.accounting
+				.prepare('SELECT * FROM item_categories WHERE user_id = ? ORDER BY name')
+				.bind(userId)
+				.all();
 
 			return {
 				content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
 			};
 		}
+	);
 
-		if (name === 'get_item_categories') {
-			const { results } = await env.accounting.prepare('SELECT * FROM item_categories WHERE user_id = ? ORDER BY name').bind(userId).all();
+	server.registerTool(
+		'get_payment_categories',
+		{
+			description: 'Get all payment categories',
+			inputSchema: {
+				user_id: z.number().optional().describe('User ID (default 1)'),
+			},
+		},
+		async ({ user_id }) => {
+			const userId = user_id || 1;
+			const { results } = await env.accounting
+				.prepare('SELECT * FROM payment_categories WHERE user_id = ? ORDER BY name')
+				.bind(userId)
+				.all();
+
 			return {
 				content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
 			};
 		}
-
-		if (name === 'get_payment_categories') {
-			const { results } = await env.accounting.prepare('SELECT * FROM payment_categories WHERE user_id = ? ORDER BY name').bind(userId).all();
-			return {
-				content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
-			};
-		}
-
-		throw new Error(`Tool not found: ${name}`);
-	});
+	);
 
 	return server;
+}
+
+export function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	const url = new URL(request.url);
+	const handler = createMcpHandler(() => createServer(env), {
+		route: url.pathname,
+	});
+	return handler(request, env, ctx);
 }

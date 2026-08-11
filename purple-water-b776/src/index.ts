@@ -11,7 +11,8 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-import { activeTransports, CloudflareSSEServerTransport, setupMcpServer } from './mcp.js';
+import { handleMcpRequest } from './mcp.js';
+
 
 // A helper function to add CORS headers to a response
 function addCorsHeaders(response: Response): Response {
@@ -196,57 +197,13 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
+		if (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/')) {
+			return handleMcpRequest(request, env, ctx);
+		}
+
 		// Handle CORS preflight requests
 		if (request.method === 'OPTIONS') {
 			return addCorsHeaders(new Response(null, { status: 204 }));
-		}
-
-		if (url.pathname === '/mcp/sse' && request.method === 'GET') {
-			const sessionId = crypto.randomUUID();
-			let { readable, writable } = new TransformStream();
-
-			const transport = new CloudflareSSEServerTransport(sessionId, '/mcp/message', writable.getWriter());
-			activeTransports.set(sessionId, transport);
-
-			transport.onclose = () => {
-				activeTransports.delete(sessionId);
-			};
-
-			request.signal.addEventListener('abort', () => {
-				activeTransports.delete(sessionId);
-			});
-
-			const server = setupMcpServer(env);
-			await server.connect(transport);
-
-			return addCorsHeaders(new Response(readable, {
-				headers: {
-					'Content-Type': 'text/event-stream',
-					'Cache-Control': 'no-cache, no-transform',
-					'Connection': 'keep-alive'
-				}
-			}));
-		}
-
-		if (url.pathname === '/mcp/message' && request.method === 'POST') {
-			const sessionId = url.searchParams.get('sessionId');
-			if (!sessionId) {
-				return addCorsHeaders(new Response('Missing sessionId', { status: 400 }));
-			}
-
-			const transport = activeTransports.get(sessionId);
-			if (!transport) {
-				return addCorsHeaders(new Response('Session not found', { status: 404 }));
-			}
-
-			const body = await request.json();
-
-			// We handle it without awaiting here to return 202 Accepted immediately,
-			// or we can await it. Typically HTTP POST in MCP SSE waits for 202.
-			// ctx.waitUntil ensures the promise finishes.
-			ctx.waitUntil(transport.handlePostMessage(body));
-
-			return addCorsHeaders(new Response('Accepted', { status: 202 }));
 		}
 
 		if (url.pathname.startsWith('/api/')) {
