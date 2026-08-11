@@ -1,65 +1,20 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { JSONRPCMessage, JSONRPCMessageSchema, ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
-export class CloudflareSSEServerTransport {
-	private writer: WritableStreamDefaultWriter<Uint8Array>;
-	private encoder = new TextEncoder();
+let transport: WebStandardStreamableHTTPServerTransport | null = null;
+let mcpServer: Server | null = null;
 
-	public onclose?: () => void;
-	public onerror?: (error: Error) => void;
-	public onmessage?: (message: JSONRPCMessage) => void;
-
-	constructor(
-		public readonly sessionId: string,
-		private readonly _endpoint: string,
-		writer: WritableStreamDefaultWriter<Uint8Array>
-	) {
-		this.writer = writer;
+export async function handleMcpRequest(request: Request, env: any): Promise<Response> {
+	if (!transport || !mcpServer) {
+		transport = new WebStandardStreamableHTTPServerTransport({
+			sessionIdGenerator: () => crypto.randomUUID(),
+		});
+		mcpServer = setupMcpServer(env);
+		await mcpServer.connect(transport);
 	}
-
-	async start() {
-		const endpointUrl = new URL(this._endpoint, 'http://localhost');
-		endpointUrl.searchParams.set('sessionId', this.sessionId);
-		const relativeUrlWithSession = endpointUrl.pathname + endpointUrl.search + endpointUrl.hash;
-
-		await this.writer.write(this.encoder.encode(`event: endpoint\ndata: ${relativeUrlWithSession}\n\n`));
-	}
-
-	async handlePostMessage(body: any) {
-		try {
-			await this.handleMessage(typeof body === 'string' ? JSON.parse(body) : body);
-		} catch (error) {
-			this.onerror?.(error as Error);
-			throw error;
-		}
-	}
-
-	async handleMessage(message: any) {
-		let parsedMessage;
-		try {
-			parsedMessage = JSONRPCMessageSchema.parse(message);
-		} catch (error) {
-			this.onerror?.(error as Error);
-			throw error;
-		}
-		this.onmessage?.(parsedMessage);
-	}
-
-	async close() {
-		try {
-			await this.writer.close();
-		} catch {
-			// ignore
-		}
-		this.onclose?.();
-	}
-
-	async send(message: JSONRPCMessage) {
-		await this.writer.write(this.encoder.encode(`event: message\ndata: ${JSON.stringify(message)}\n\n`));
-	}
+	return transport.handleRequest(request);
 }
-
-export const activeTransports = new Map<string, CloudflareSSEServerTransport>();
 
 export function setupMcpServer(env: any): Server {
 	const server = new Server(
