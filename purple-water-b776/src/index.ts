@@ -110,6 +110,31 @@ function getCurrentMonthUtcRange(): { startDateUtc: string; endDateUtc: string }
 	};
 }
 
+function extractColumnsFromCreateTableSql(sql: string): string[] {
+	const firstParen = sql.indexOf('(');
+	const lastParen = sql.lastIndexOf(')');
+	if (firstParen === -1 || lastParen === -1 || lastParen <= firstParen) {
+		return [];
+	}
+	const body = sql.substring(firstParen + 1, lastParen);
+	const definitions = body.split(',');
+	const columns: string[] = [];
+	for (const def of definitions) {
+		const trimmed = def.trim();
+		if (
+			!trimmed ||
+			/^(FOREIGN\s+KEY|PRIMARY\s+KEY|UNIQUE|CHECK|CONSTRAINT)/i.test(trimmed)
+		) {
+			continue;
+		}
+		const match = trimmed.match(/^["`[]?([a-zA-Z0-9_]+)["`\]]?/);
+		if (match) {
+			columns.push(match[1]);
+		}
+	}
+	return columns;
+}
+
 async function handleCategoryCollectionRequest(request: Request, url: URL, env: Env, tableName: 'item_categories' | 'payment_categories'): Promise<Response | null> {
 	if (request.method === 'GET') {
 		const userId = url.searchParams.get('user-id') || DEFAULT_USER_ID;
@@ -409,7 +434,43 @@ export default {
 					return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
 				}
 			}
-      
+
+			// Handle /api/database/size
+			if (url.pathname === '/api/database/size' && request.method === 'GET') {
+				try {
+					const tables = await env.accounting
+						.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'")
+						.all<{ name: string; sql: string }>();
+
+					let totalSizeBytes = 0;
+					const tableDetails: Record<string, number> = {};
+
+					for (const table of tables.results ?? []) {
+						const tableName = table.name;
+						const columns = extractColumnsFromCreateTableSql(table.sql);
+						if (columns.length === 0) {
+							tableDetails[tableName] = 0;
+							continue;
+						}
+
+						const sumExpr = columns.map(c => `COALESCE(length(cast("${c}" as blob)), 0)`).join(' + ');
+						const query = `SELECT COALESCE(SUM(${sumExpr}), 0) as size FROM "${tableName}"`;
+						const res = await env.accounting.prepare(query).first<{ size: number }>();
+						const size = res?.size ?? 0;
+						tableDetails[tableName] = size;
+						totalSizeBytes += size;
+					}
+
+					return addCorsHeaders(
+						new Response(JSON.stringify({ size_bytes: totalSizeBytes, tables: tableDetails }), {
+							headers: { 'Content-Type': 'application/json' },
+						})
+					);
+				} catch (e: any) {
+					return addCorsHeaders(new Response(`Error processing request: ${e.message}`, { status: 500 }));
+				}
+			}
+
       // Handle /api/transactions/:id
 			const transactionMatch = url.pathname.match(/^\/api\/transactions\/(\d+)$/);
 			if (transactionMatch) {

@@ -15,6 +15,7 @@
     - `/api/transactions` (交易紀錄)
     - `/api/item-categories` (項目類別)
     - `/api/payment-categories` (支付類別)
+    - `/api/database/size` (資料庫總大小)
 - **路由 (Routing):** 使用簡易的 if/else 結構進行路由判斷。
 - **業務邏輯 (Business Logic):**
     - 當一個項目類別或支付類別仍被任何交易紀錄使用時，禁止刪除該類別，以確保資料完整性。

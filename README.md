@@ -15,6 +15,7 @@ This document summarizes the design and development progress of the personal con
     - `/api/transactions` (Transaction records)
     - `/api/item-categories` (Item categories)
     - `/api/payment-categories` (Payment categories)
+    - `/api/database/size` (Database size statistics)
 - **Routing:** Uses a simple if/else structure for routing.
 - **Business Logic:**
     - Prevents the deletion of an item category or payment category if it is still in use by any transaction record, ensuring data integrity.
