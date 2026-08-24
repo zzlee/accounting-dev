@@ -32,7 +32,7 @@ All run from `purple-water-b776/`.
 - **Backend**: Monolithic `src/index.ts` — simple if/else routing, no framework. D1 binding named `accounting`. CORS added manually to every response.
 - **Frontend**: Bootstrap 5, `react-icons` (Fa), `@tanstack/react-table`, `react-datepicker`. Modals lazy-loaded (`React.lazy`). PWA via `vite-plugin-pwa`.
 - **DB**: SQLite (Cloudflare D1) — 4 tables: `users`, `transactions`, `item_categories`, `payment_categories`. Migration in `migrations/add_user_id.sql` added `user_id` columns.
-- **API routes**: `/api/transactions`, `/api/item-categories`, `/api/payment-categories`, `/api/users` — each with GET/POST/PUT/DELETE as appropriate.
+- **API routes**: `/api/transactions`, `/api/item-categories`, `/api/payment-categories`, `/api/users`, `/api/database/size` — each with GET/POST/PUT/DELETE as appropriate.
 - **Auth / multi-user**: `user-id` query param everywhere. Default is `1` (from `DEFAULT_USER_ID=1` in backend, `'1'` in frontend).
 - **Amount convention**: positive = expense (red `text-danger`), negative = income (green `text-success`).
 - **Static assets**: In production wrangler serves `frontend/dist/` (see `wrangler.jsonc` assets). In dev, Vite proxies `/api` to `localhost:8787`.

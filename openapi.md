@@ -341,6 +341,29 @@ paths:
         '500':
           description: Error processing request
 
+  /api/database/size:
+    get:
+      summary: Get database size
+      description: Retrieve total database size in bytes and breakdown by table.
+      responses:
+        '200':
+          description: Database size statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  size_bytes:
+                    type: integer
+                    description: Total content size in bytes
+                  tables:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                    description: Content size in bytes per table
+        '500':
+          description: Error processing request
+
   /api/users:
     post:
       summary: Create a user
