@@ -461,8 +461,11 @@ export default {
 						totalSizeBytes += size;
 					}
 
+					const d1SizeBytes = (tables.meta as any)?.size_after;
+					const finalSizeBytes = typeof d1SizeBytes === 'number' ? d1SizeBytes : totalSizeBytes;
+
 					return addCorsHeaders(
-						new Response(JSON.stringify({ size_bytes: totalSizeBytes, tables: tableDetails }), {
+						new Response(JSON.stringify({ size_bytes: finalSizeBytes, tables: tableDetails }), {
 							headers: { 'Content-Type': 'application/json' },
 						})
 					);

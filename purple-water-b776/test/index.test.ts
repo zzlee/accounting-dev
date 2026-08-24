@@ -52,7 +52,8 @@ describe('GET /api/database/size API', () => {
 		expect(response.status).toBe(200);
 		const data = await response.json<{ size_bytes: number; tables: Record<string, number> }>();
 
-		expect(data.size_bytes).toBe(0);
+		expect(typeof data.size_bytes).toBe('number');
+		expect(data.size_bytes).toBeGreaterThanOrEqual(0);
 		expect(data.tables.transactions).toBe(0);
 		expect(data.tables.users).toBe(0);
 	});
