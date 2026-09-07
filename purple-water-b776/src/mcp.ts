@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 export function createServer(env: Env) {
 	const server = new McpServer({
-		name: 'accounting-dev',
+		name: 'accounting',
 		version: '1.0.0',
 	});
 
