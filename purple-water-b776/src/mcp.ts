@@ -506,13 +506,20 @@ export function createServer(env: Env) {
 }
 
 export function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-	// Optional bearer-token protection. Set the MCP_AUTH_TOKEN secret to require
-	// `Authorization: Bearer <token>` on every request to /mcp. When unset, the
-	// endpoint stays open (backwards compatible).
+	const url = new URL(request.url);
+
+	// Optional token protection. Set the MCP_AUTH_TOKEN secret to require a token.
+	// The token may be supplied as an `Authorization: Bearer <token>` header, or —
+	// for URL-only clients such as the Gemini web app, which cannot set headers —
+	// embedded in the URL as `/mcp/<token>` or `/mcp?token=<token>`.
+	// When the secret is unset the endpoint stays open (backwards compatible).
 	const expectedToken = (env as { MCP_AUTH_TOKEN?: string }).MCP_AUTH_TOKEN;
 	if (expectedToken && request.method !== 'OPTIONS') {
 		const authHeader = request.headers.get('Authorization') ?? '';
-		const providedToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+		const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+		const pathToken = url.pathname.startsWith('/mcp/') ? safeDecodeURIComponent(url.pathname.slice('/mcp/'.length)).replace(/\/+$/, '') : '';
+		const queryToken = url.searchParams.get('token') ?? '';
+		const providedToken = headerToken || pathToken || queryToken;
 		if (providedToken !== expectedToken) {
 			return Promise.resolve(
 				new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Unauthorized' }, id: null }), {
@@ -523,9 +530,24 @@ export function handleMcpRequest(request: Request, env: Env, ctx: ExecutionConte
 		}
 	}
 
-	const url = new URL(request.url);
 	const handler = createMcpHandler(() => createServer(env), {
-		route: url.pathname,
+		route: '/mcp',
 	});
+
+	// When the token is embedded in the path, hand the MCP handler a clean /mcp route.
+	if (url.pathname.startsWith('/mcp/')) {
+		const cleanUrl = new URL(request.url);
+		cleanUrl.pathname = '/mcp';
+		return handler(new Request(cleanUrl.toString(), request), env, ctx);
+	}
+
 	return handler(request, env, ctx);
+}
+
+function safeDecodeURIComponent(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
 }
